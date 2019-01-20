@@ -1,3 +1,4 @@
+package utilities;
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -8,14 +9,16 @@ public class FileReaderWrapper {
 	BufferedReader bufferedReader;
 	String fileName;
 	
-	public FileReaderWrapper(String filePath) {
+	public FileReaderWrapper(String fileName) {
 		
-		fileName = filePath;
+		this.fileName = fileName;
+		
 		try {
-			bufferedReader = new BufferedReader(new FileReader(filePath));
+			bufferedReader = new BufferedReader(new FileReader(fileName));
 		}
 		catch (FileNotFoundException e) {
-			System.out.println("Warning: \"" + fileName + "\" cannot be opened.");
+			System.out.println("Warning: \"" + fileName + "\" cannot be found.");
+			e.printStackTrace();
 		}
 		
 	}
@@ -26,6 +29,7 @@ public class FileReaderWrapper {
 			c = (char) bufferedReader.read();
 		} catch (IOException e) {
 			System.out.println("Warning: \"" + fileName + "\" cannot be read.");
+			e.printStackTrace();
 		}
 		
 		return c;
@@ -37,6 +41,11 @@ public class FileReaderWrapper {
 		}
 		catch (IOException e) {
 			System.out.println("Warning: \"" + fileName + "\" cannot be closed." );
+			e.printStackTrace();
 		}
+	}
+	
+	public String getFileName() {
+		return fileName.substring(fileName.lastIndexOf('\\') + 1, fileName.lastIndexOf('.'));
 	}
 }

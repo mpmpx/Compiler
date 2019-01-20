@@ -1,4 +1,8 @@
-import java.util.HashMap;
+package lexer;
+
+import token.Token;
+import token.TokenType;
+import utilities.FileReaderWrapper;
 
 public class Scanner {
 	
@@ -8,17 +12,21 @@ public class Scanner {
 	private char currentChar;
 	private boolean isBackUp;
 	private boolean isEOF;
+	private String tokenValue;
 	
-	
-	public Scanner(FileReaderWrapper fileReader) {
-		this.fileReader = fileReader;
+	public Scanner(String fileName) {
+
 		lineNum = 1;
 		currentChar = '\n';
 		isBackUp = false;
 		isEOF = false;
+		
+		fileReader = new FileReaderWrapper(fileName);
 	}
 	
 	public Token nextToken() {
+		tokenValue = "";
+		
 		if (isEOF) {
 			return new Token(TokenType.EOF, "EOF", lineNum);
 		}
@@ -26,70 +34,64 @@ public class Scanner {
 		nextChar();
 		// number
 		if (Character.isDigit(currentChar)) {
-			String value = "";
-			
 			// integer
-			value += makeInteger();
+			makeInteger();
 			nextChar();
 			
 			if (currentChar != '.') {
-				backUp();
-				return new Token(TokenType.INT_NUM, value, lineNum);
+				backup();
+				return new Token(TokenType.INT_NUM, tokenValue, lineNum);
 			}
 			// fraction [e[+|-] integer]
 			else {
 				// fraction
-				String fraction = makeFraction();
-				value += fraction;
-				
-				// check whether the last digit of the fraction is nonzero
-				if (fraction.length() > 2 && fraction.charAt(fraction.length() - 1) == '0') {
-					return new Token(TokenType.ERROR_NUM, value, lineNum);
+				if (!makeFraction()) {
+					return new Token(TokenType.ERROR_NUM, tokenValue, lineNum);
 				}
+				
 				nextChar();
 				
 				// [e[+|-] integer]
 				if (currentChar == 'e') {
 					// e
-					value += 'e';
+					tokenValue += 'e';
 					nextChar();
 					
 					// [+|-]
 					if (currentChar == '+' || currentChar == '-') {
-						value += currentChar;
+						tokenValue += currentChar;
 						nextChar();
 					} 
 					
 					// integer
 					if (Character.isDigit(currentChar)) {
-						value += makeInteger();
+						makeInteger();
+					} 
+					else {
+						backup();
+						return new Token(TokenType.ERROR_NUM, tokenValue, lineNum);
 					}
 				}
 				
-				if (Character.isDigit(value.charAt(value.length() - 1))) {
-					return new Token(TokenType.FLOAT_NUM, value, lineNum);
-				}
-				else {
-					return new Token(TokenType.ERROR_NUM, value, lineNum);
-				}
+				return new Token(TokenType.FLOAT_NUM, tokenValue, lineNum);
 			}
 		}
 		// id
 		else if (Character.isAlphabetic(currentChar)) {
-			String value = "" + currentChar;
+			tokenValue += currentChar;
 			nextChar();
 			while (isAlphanum((char) currentChar)) {
-				value += currentChar;
+				tokenValue += currentChar;
 				nextChar();
 			}
 			
-			backUp();
+			backup();
 			
-			if (TokenType.reservedKeysMap.containsKey(value)) {
-				return new Token(TokenType.reservedKeysMap.get(value), value, lineNum);
+			if (TokenType.reservedWordsMap.containsKey(tokenValue)) {
+				return new Token(TokenType.reservedWordsMap.get(tokenValue), tokenValue, lineNum);
 			}
 			else {
-				return new Token(TokenType.ID, value, lineNum);
+				return new Token(TokenType.ID, tokenValue, lineNum);
 			}
 		}
 		// Operators and punctuation
@@ -102,7 +104,7 @@ public class Scanner {
 					return new Token(TokenType.EQ, "==", lineNum);
 				}
 				else {
-					backUp();
+					backup();
 					return new Token(TokenType.ASSIGN, "=", lineNum);
 				}
 			case '<' :
@@ -114,7 +116,7 @@ public class Scanner {
 					return new Token(TokenType.NEQ, "<>", lineNum);
 				}
 				else {
-					backUp();
+					backup();
 					return new Token(TokenType.LT, "<", lineNum);
 				}
 			case '>' :
@@ -123,7 +125,7 @@ public class Scanner {
 					return new Token(TokenType.GEQ, ">=", lineNum);
 				}
 				else {
-					backUp();
+					backup();
 					return new Token(TokenType.GT, ">", lineNum);
 				}
 			case '+' :
@@ -136,10 +138,15 @@ public class Scanner {
 				nextChar();
 				if (currentChar == '/') {
 					nextChar();
-					while (currentChar != '\n') {
+					while (currentChar != '\n' && currentChar != (char) EOF) {
 						nextChar();
-						return nextToken();
 					}
+					
+					if (currentChar == (char) EOF) {
+						backup();
+					}
+					
+					return nextToken();
 				}
 				else if (currentChar == '*') {
 					char reservedChar = ' ';
@@ -151,15 +158,43 @@ public class Scanner {
 						
 						if (currentChar == '/' && reservedChar == '*') {
 							return nextToken();
+						} else if (currentChar == (char) EOF) {
+							System.out.println("sa");
+
+							backup();
+							return nextToken();
 						}
 						reservedChar = currentChar;
 						nextChar();
 					}
 				}
 				else {
-					backUp();
+					backup();
 					return new Token(TokenType.DIV, "/", lineNum);
 				}
+			case '!' :
+				return new Token(TokenType.NOT, "!", lineNum);
+
+			case '&' :
+				nextChar();
+				if (currentChar == '&') {
+					return new Token(TokenType.AND, "&&", lineNum);
+				}
+				else {
+					backup();
+	            	return new Token(TokenType.ERROR_ID, "&", lineNum);
+				}
+				
+			case '|' :
+				nextChar();
+				if (currentChar == '|') {
+					return new Token(TokenType.OR, "||", lineNum);
+				}
+				else {
+					backup();
+	            	return new Token(TokenType.ERROR_ID, "|", lineNum);
+				}
+				
 			// Punctuation
 			case ':' :
 				nextChar();
@@ -167,7 +202,7 @@ public class Scanner {
 					return new Token(TokenType.SR, "::", lineNum);
 				}
 				else {
-					backUp();
+					backup();
 					return new Token(TokenType.COLON, ":", lineNum);
 				}
 			case ',' :
@@ -195,7 +230,7 @@ public class Scanner {
             	while (currentChar == ' ') {
             		nextChar();
             	}
-            	backUp();
+            	backup();
             	return nextToken();
             case '\t':
             case '\r':
@@ -210,8 +245,8 @@ public class Scanner {
 				return new Token(TokenType.EOF, "EOF", lineNum);
             // invalid identifier
 			default :
-            	String value = String.valueOf(currentChar);
-				return new Token(TokenType.ERROR_ID, value, lineNum);
+            	tokenValue += currentChar;
+            	return new Token(TokenType.ERROR_ID, tokenValue, lineNum);
 			}
 		}
 		
@@ -219,50 +254,51 @@ public class Scanner {
 	}
 	
 	
-	private String makeFraction() {
-		String value = "" + currentChar;
+	private Boolean makeFraction() {
+		tokenValue += currentChar;
 		nextChar();
 		
 		// error format of fraction
 		if (!Character.isDigit(currentChar)) {
-			return value;
+			backup();
+			return false;
 		}
 		// .0
 		else if (currentChar == '0') {
-			value += currentChar;
+			tokenValue += currentChar;
 			nextChar();
 			
 			if (!Character.isDigit(currentChar)) {
-				backUp();
-				return value;
+				backup();
+				return true;
 			}
 		}
 		
 		// digit* nonzero
-		value += currentChar;
+		tokenValue += currentChar;
 		nextChar();
 		while (Character.isDigit(currentChar)) {
-			value += currentChar;
+			tokenValue += currentChar;
 			nextChar();
 		}
-		backUp();
-		return value;
+		backup();
+		return !tokenValue.endsWith("0");
 	}
 	
-	private String makeInteger() {
-		String value = "" + currentChar;
+	private void makeInteger() {
+		tokenValue += currentChar;
 		if (currentChar == '0') {
-			return value;
+			return;
 		}
 		
 		nextChar();
 		while (Character.isDigit(currentChar)) {
-			value += currentChar;
+			tokenValue += currentChar;
 			nextChar();
 		}
 		
-		backUp();
-		return value;
+		backup();
+		return;
 	}
 	
 	private void nextChar() {
@@ -274,7 +310,7 @@ public class Scanner {
 		}
 	}
 	
-	private void backUp() {
+	private void backup() {
 		isBackUp = true;
 	}
 	
@@ -282,5 +318,8 @@ public class Scanner {
 		return Character.isDigit(c) || Character.isAlphabetic(c) || c == '_';
 	}
 	
-
+	public void close() {
+		fileReader.close();;
+	}
+	
 }

@@ -1,3 +1,4 @@
+package token;
 import java.util.HashMap;
 
 public enum TokenType {
@@ -11,12 +12,12 @@ public enum TokenType {
 	ELSE, 			// else
 	FOR, 			// for
 	CLASS, 			// class
-	INT, 			// int
+	INTEGER, 		// integer
 	FLOAT, 			// float
-	GET, 			// get
-	PUT, 			// put
+	READ, 			// read
+	WRITE, 			// write
 	RETURN, 		// return
-	PROGRAM,		// program
+	MAIN,			// main
 
 	// Operators
 	EQ, 			// ==
@@ -29,9 +30,9 @@ public enum TokenType {
 	SUB,			// -
 	MUL,			// *
 	DIV,			// /
-	NOT,			// not
-	AND,			// and
-	OR,				// or
+	NOT,			// !
+	AND,			// &&
+	OR,				// ||
 	ASSIGN,			// =
 	SR,				// ::
 	
@@ -52,20 +53,17 @@ public enum TokenType {
 	EOL,			// \n
 	EOF; 			// end of the file
 	
-	public static HashMap<String, TokenType> reservedKeysMap = new HashMap<String, TokenType>() {{
-		put("and", TokenType.AND);
-		put("not", TokenType.NOT);
-		put("or", TokenType.OR);
+	public static HashMap<String, TokenType> reservedWordsMap = new HashMap<String, TokenType>() {{
 		put("if", TokenType.IF);
 		put("then", TokenType.THEN);
 		put("else", TokenType.ELSE);
 		put("for", TokenType.FOR);
 		put("class", TokenType.CLASS);
-		put("int", TokenType.INT);
+		put("integer", TokenType.INTEGER);
 		put("float", TokenType.FLOAT);
-		put("get", TokenType.GET);
-		put("put", TokenType.PUT);
+		put("read", TokenType.READ);
+		put("write", TokenType.WRITE);
 		put("return", TokenType.RETURN);
-		put("program", TokenType.PROGRAM);
+		put("main", TokenType.MAIN);
 	}};
 }
