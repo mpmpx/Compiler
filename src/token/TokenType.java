@@ -50,6 +50,7 @@ public enum TokenType {
 	
 	ERROR_NUM,      // invalid number
 	ERROR_ID,		// invalid identifier
+	ERROR_COMMENT,  // incomplete multiple-line comment
 	EOL,			// \n
 	EOF; 			// end of the file
 	

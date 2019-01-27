@@ -136,6 +136,7 @@ public class Scanner {
 				return new Token(TokenType.MUL, "*", lineNum);
 			case '/' :
 				nextChar();
+				// // comment
 				if (currentChar == '/') {
 					nextChar();
 					while (currentChar != '\n' && currentChar != (char) EOF) {
@@ -145,6 +146,7 @@ public class Scanner {
 					
 					return nextToken();
 				}
+				// /* ... */ comment
 				else if (currentChar == '*') {
 					char reservedChar = ' ';
 					nextChar();

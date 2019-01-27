@@ -13,6 +13,6 @@ public class Token {
 	}
 	
 	public String toString() {
-		return "Token type: " + type + ", value: " + value + ", line " + lineNum;
+		return "["+ type + ", " + value + ", " + lineNum + "]";
 	}
 }
