@@ -141,10 +141,7 @@ public class Scanner {
 					while (currentChar != '\n' && currentChar != (char) EOF) {
 						nextChar();
 					}
-					
-					if (currentChar == (char) EOF) {
-						backup();
-					}
+					backup();
 					
 					return nextToken();
 				}
@@ -155,12 +152,9 @@ public class Scanner {
 						if (currentChar == '\n') {
 							lineNum++;
 						}
-						
-						if (currentChar == '/' && reservedChar == '*') {
+						else if (currentChar == '/' && reservedChar == '*') {
 							return nextToken();
 						} else if (currentChar == (char) EOF) {
-							System.out.println("sa");
-
 							backup();
 							return nextToken();
 						}
@@ -214,7 +208,7 @@ public class Scanner {
 			case '[' :
 				return new Token(TokenType.LBRACKET, "[", lineNum);
 			case ']' :
-				return new Token(TokenType.LBRACKET, "]", lineNum);
+				return new Token(TokenType.RBRACKET, "]", lineNum);
 			case '{' :
 				return new Token(TokenType.LBRACE, "{", lineNum);
 			case '}' :

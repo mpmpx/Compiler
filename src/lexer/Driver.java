@@ -30,6 +30,7 @@ public class Driver {
 				if (token.lineNum > lineNum) {
 					System.out.println();
 					lineNum++;
+					outputWriter.write("\n");
 				}
 				
 				if (token.type == TokenType.ERROR_NUM) {
