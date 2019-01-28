@@ -1,4 +1,5 @@
 package lexer;
+import java.io.File;
 import java.nio.file.Paths;
 
 import javax.swing.JFileChooser;
@@ -8,7 +9,11 @@ import token.Token;
 import token.TokenType;
 import utilities.FileWriterWrapper;
 
-
+/**
+ * 
+ * @author Peixing Ma
+ * This a driver class that repeatedly calls scanner to read a file in a loop.
+ */
 
 public class Driver {
 	
@@ -22,6 +27,11 @@ public class Driver {
 	public Driver() {
 		rootDir = (Paths.get("").toAbsolutePath().toString());
 		outputDir = rootDir + "\\src\\lexer\\output\\";
+		File output = new File(outputDir);
+		
+		if (!output.exists()) {
+			output.mkdirs();
+		}
 	}
 	
 	/**
@@ -51,22 +61,25 @@ public class Driver {
 			if (token.lineNum > lineNum) {
 				System.out.println();
 				lineNum = token.lineNum;
-				outputWriter.write("\n");
+				outputWriter.write("\r\n");
 			}
 
 			if (token.type == TokenType.ERROR_NUM) {
 				errorWriter
-						.write("Lexical Error: \"" + token.value + "\" is a invalid number at line " + lineNum + ".\n");
-				errorWriter.write("\r\n");
-			} else if (token.type == TokenType.ERROR_ID) {
+						.write("Lexical Error: \"" + token.value + "\" is an invalid number at line " + lineNum + ".\r\n");
+			} 
+			else if (token.type == TokenType.ERROR_ID) {
 				errorWriter.write(
-						"Lexical Error: \"" + token.value + "\" is an invalid identifier at line " + lineNum + ".\n");
-				errorWriter.write("\r\n");
-			} else {
+						"Lexical Error: \"" + token.value + "\" is an invalid identifier at line " + lineNum + ".\r\n");
+			} 
+			else if (token.type == TokenType.ERROR_CMT) {
+				errorWriter.write(
+						"Lexical Error: incomplete multiple-line comment possibly missing \"*/\". Starting at line " + lineNum + ".\r\n");
+			}
+			else {
 				outputWriter.write(token.type.toString().toLowerCase() + " ");
 			}
 			System.out.print(token);
-
 			token = scanner.nextToken();
 		}
 
@@ -99,8 +112,9 @@ public class Driver {
 	 * @param fileName the absolute path of the file.
 	 * @return the file name without its extension and path.
 	 */
-	public static String getFileName(String fileName) {
-		return fileName.substring(fileName.lastIndexOf('\\') + 1, fileName.lastIndexOf('.'));
+	public String getFileName(String fileName) {
+		fileName = new File(fileName).getName();
+		return fileName.substring(0, fileName.lastIndexOf('.'));
 	}
 	
 	/**

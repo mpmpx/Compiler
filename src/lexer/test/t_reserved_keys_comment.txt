@@ -1,0 +1,10 @@
+/* This is a commnet. */ 
+// This is another comment.
+if then else for 
+
+// This file contains some reserved words
+/* This is 
+ a multiple-line 
+ commnet.
+*/ 
+class integer float read write return main

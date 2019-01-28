@@ -1,6 +1,11 @@
 package token;
 import java.util.HashMap;
 
+/**
+ * 
+ * @author Peixing Ma
+ * This enum class defines all token types.
+ */
 public enum TokenType {
 	ID,				// identifier 
 	FLOAT_NUM, 		// float number
@@ -48,9 +53,10 @@ public enum TokenType {
 	LBRACE,			// {
 	RBRACE,			// }
 	
+	CMT,			// comment
 	ERROR_NUM,      // invalid number
 	ERROR_ID,		// invalid identifier
-	ERROR_COMMENT,  // incomplete multiple-line comment
+	ERROR_CMT,  // incomplete multiple-line comment
 	EOL,			// \n
 	EOF; 			// end of the file
 	
