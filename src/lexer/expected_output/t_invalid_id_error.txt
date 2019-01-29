@@ -1,0 +1,9 @@
+Lexical Error: "_" is an invalid identifier at line 3.
+Lexical Error: "_" is an invalid identifier at line 4.
+Lexical Error: "_" is an invalid identifier at line 5.
+Lexical Error: "&" is an invalid identifier at line 6.
+Lexical Error: "|" is an invalid identifier at line 6.
+Lexical Error: "_" is an invalid identifier at line 6.
+Lexical Error: "%" is an invalid identifier at line 6.
+Lexical Error: "#" is an invalid identifier at line 6.
+Lexical Error: "@" is an invalid identifier at line 6.

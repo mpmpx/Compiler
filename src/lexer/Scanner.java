@@ -4,6 +4,13 @@ import token.Token;
 import token.TokenType;
 import utilities.FileReaderWrapper;
 
+/**
+ * 
+ * @author Peixing Ma
+ * The scanner reads a sequence of characters from a file. When the sequence 
+ * of characters which has been scanned composes a token, the scanner terminates scanning
+ * and returns this token.
+ */
 public class Scanner {
 	
 	private static final int EOF = -1;
@@ -14,8 +21,11 @@ public class Scanner {
 	private boolean isEOF;
 	private String tokenValue;
 	
+	/**
+	 * Constructor
+	 * @param the name of the file to be scanner
+	 */
 	public Scanner(String fileName) {
-
 		lineNum = 1;
 		currentChar = '\n';
 		isBackUp = false;
@@ -24,6 +34,10 @@ public class Scanner {
 		fileReader = new FileReaderWrapper(fileName);
 	}
 	
+	/**
+	 * Returns the next token from the file.
+	 * @return the next token from the file.
+	 */
 	public Token nextToken() {
 		tokenValue = "";
 		
@@ -136,29 +150,37 @@ public class Scanner {
 				return new Token(TokenType.MUL, "*", lineNum);
 			case '/' :
 				nextChar();
+				// // comment
 				if (currentChar == '/') {
 					nextChar();
+					
 					while (currentChar != '\n' && currentChar != (char) EOF) {
+						tokenValue += currentChar;
 						nextChar();
 					}
-					backup();
 					
-					return nextToken();
+					backup();
+					tokenValue = tokenValue.substring(0, tokenValue.length() - 1);
+					return new Token(TokenType.CMT, tokenValue, lineNum);
 				}
+				// /* ... */ comment
 				else if (currentChar == '*') {
 					char reservedChar = ' ';
+					int headPos = lineNum;
 					nextChar();
 					while (true) {
 						if (currentChar == '\n') {
 							lineNum++;
 						}
 						else if (currentChar == '/' && reservedChar == '*') {
-							return nextToken();
+							tokenValue = tokenValue.substring(0, tokenValue.length() - 1);
+							return new Token(TokenType.CMT, tokenValue, headPos);
 						} else if (currentChar == (char) EOF) {
 							backup();
-							return nextToken();
+							return new Token(TokenType.ERROR_CMT, tokenValue, headPos);
 						}
 						reservedChar = currentChar;
+						tokenValue += currentChar;
 						nextChar();
 					}
 				}
@@ -243,11 +265,13 @@ public class Scanner {
             	return new Token(TokenType.ERROR_ID, tokenValue, lineNum);
 			}
 		}
-		
-		
 	}
 	
-	
+	/**
+	 * Makes up the fraction from the following characters.
+	 * The format is (.0 | .digit* nonzero).
+	 * @return true if the format of the fraction is correct. Otherwise, false.
+	 */
 	private Boolean makeFraction() {
 		tokenValue += currentChar;
 		nextChar();
@@ -268,7 +292,7 @@ public class Scanner {
 			}
 		}
 		
-		// digit* nonzero
+		// .digit* nonzero
 		tokenValue += currentChar;
 		nextChar();
 		while (Character.isDigit(currentChar)) {
@@ -279,6 +303,10 @@ public class Scanner {
 		return !tokenValue.endsWith("0");
 	}
 	
+	/**
+	 * Makes up an integer from the following characters.
+	 * The format is (0 | nonzero digit*).
+	 */
 	private void makeInteger() {
 		tokenValue += currentChar;
 		if (currentChar == '0') {
@@ -295,6 +323,10 @@ public class Scanner {
 		return;
 	}
 	
+	/**
+	 * Reads the next character from the file. Skips this step if the
+	 * flag of backup is true.
+	 */
 	private void nextChar() {
 		if (isBackUp) {
 			isBackUp = false;
@@ -304,14 +336,26 @@ public class Scanner {
 		}
 	}
 	
+	/**
+	 * Sets the backup flag as true.
+	 */
 	private void backup() {
 		isBackUp = true;
 	}
 	
+	/**
+	 * Checks whether given character is a digit, an alphabet or an underscore. 
+	 * @param c the character to be checked.
+	 * @return true if the given character is a digit, an alphabet or an underscore.
+	 * Otherwise, false.
+	 */
 	private boolean isAlphanum(char c) {
 		return Character.isDigit(c) || Character.isAlphabetic(c) || c == '_';
 	}
 	
+	/**
+	 * Closes the scanner and its file reader.
+	 */
 	public void close() {
 		fileReader.close();;
 	}
