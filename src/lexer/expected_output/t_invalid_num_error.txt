@@ -1,0 +1,5 @@
+Lexical Error: "12." is an invalid number at line 5.
+Lexical Error: "12.00" is an invalid number at line 6.
+Lexical Error: "12.10" is an invalid number at line 7.
+Lexical Error: "12.1e" is an invalid number at line 8.
+Lexical Error: "12.1e-" is an invalid number at line 9.

@@ -1,5 +1,5 @@
 **/*out.txt
-**/*error.txt
+output/error.txt
 /bin
 .gitignore
 .classpath
