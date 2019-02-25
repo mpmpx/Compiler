@@ -87,6 +87,7 @@ public class Scanner {
 					}
 				}
 				
+				backup();
 				return new Token(TokenType.FLOAT_NUM, tokenValue, lineNum);
 			}
 		}
