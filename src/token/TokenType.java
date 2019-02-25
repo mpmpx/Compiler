@@ -58,7 +58,9 @@ public enum TokenType {
 	ERROR_ID,		// invalid identifier
 	ERROR_CMT,  // incomplete multiple-line comment
 	EOL,			// \n
-	EOF; 			// end of the file
+	EOF, 			// end of the file
+	
+	EPSILON;
 	
 	public static HashMap<String, TokenType> reservedWordsMap = new HashMap<String, TokenType>() {{
 		put("if", TokenType.IF);

@@ -61,7 +61,6 @@ public class Driver {
 			if (token.lineNum > lineNum) {
 				System.out.println();
 				lineNum = token.lineNum;
-				outputWriter.write("\r\n");
 			}
 
 			if (token.type == TokenType.ERROR_NUM) {
@@ -77,7 +76,16 @@ public class Driver {
 						"Lexical Error: incomplete multiple-line comment possibly missing \"*/\". Starting at line " + lineNum + ".\r\n");
 			}
 			else {
-				outputWriter.write(token.type.toString().toLowerCase() + " ");
+				if (token.type == TokenType.ID || token.type == TokenType.INT_NUM || token.type == TokenType.FLOAT_NUM
+						|| token.type == TokenType.AND || token.type == TokenType.OR || token.type == TokenType.NOT || token.type == TokenType.SR
+						|| token.type == TokenType.EQ|| token.type == TokenType.GEQ|| token.type == TokenType.GT
+						|| token.type == TokenType.LEQ || token.type == TokenType.LT || token.type == TokenType.NEQ) {
+					outputWriter.write(token.type.toString().toLowerCase() + " ");
+				}
+				else {
+				//outputWriter.write(token.type.toString().toLowerCase() + " ");
+					outputWriter.write(token.value + " ");
+				}
 			}
 			System.out.print(token);
 			token = scanner.nextToken();
