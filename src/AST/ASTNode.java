@@ -25,9 +25,15 @@ public class ASTNode {
 		this.type = type;
 	}
 	
+	
 	public void print(int level) {
 		
-		System.out.println("level " + level + ": " + type);
+		//System.out.println("level " + level + ": " + type);
+		
+		for (int i = 0; i < level; i++) {
+			System.out.print("-");
+		}
+		System.out.println(type);
 		
 		if (leftmostChild != null) {
 			leftmostChild.print(level + 1);

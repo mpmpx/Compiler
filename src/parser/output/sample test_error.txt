@@ -1,2 +1,0 @@
-Syntax error at line 12. Expected (non-terminal: assignStat).
-Syntax error at line 18. Expected (terminal: INT_NUM).

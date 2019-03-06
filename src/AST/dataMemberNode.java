@@ -1,8 +1,8 @@
 package AST;
 
-public class dataMemberNode extends ASTNode{
+public class DataMemberNode extends ASTNode{
 
-	public dataMemberNode(String v) {
+	public DataMemberNode(String v) {
 		super(v);
 	}
 

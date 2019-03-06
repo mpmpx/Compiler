@@ -1,8 +1,8 @@
 package AST;
 
-public class TermNoDE extends ASTNode{
+public class TermNode extends ASTNode{
 
-	public TermNoDE(String v) {
+	public TermNode(String v) {
 		super(v);
 	}
 
