@@ -1,0 +1,13 @@
+float randomize(){
+ float value;
+ value = 100 * (2 + 3.0 / 7.0006);
+ value = 1.05 + ((2.04 * 2.47) - 3.0) + 7.0006 > 1 && ! - 1;
+ return ();};
+
+main {
+
+ for ( integer i = 0; i < 10;) {
+ };
+
+ if () then{}else{};
+};

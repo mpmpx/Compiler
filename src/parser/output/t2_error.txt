@@ -1,0 +1,4 @@
+Syntax error at line 5. Expected (non-terminal: expr).
+Syntax error at line 9. Expected (non-terminal: assignStat).
+Syntax error at line 12. Expected (non-terminal: expr).
+Syntax error at line 12. Expected (non-terminal: varstatList).

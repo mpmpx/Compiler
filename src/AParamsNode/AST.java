@@ -1,4 +1,4 @@
-package AST;
+package AParamsNode;
 
 public class AST {
 
@@ -6,21 +6,15 @@ public class AST {
 		 
 	}
 	
-	public static ASTNode makeNode() {
-		return new ASTNode();
-	}
-	
 	public static ASTNode makeNode(String op) {
+
 		return new ASTNode(op);
+		
 	}
 	
 	public static ASTNode makeFamily(String op, ASTNode... nodes) {
 		ASTNode parentNode = makeNode(op);
 		ASTNode leftmostChild = nodes[0];
-		if (leftmostChild == null) {
-			return null;
-		}
-		
 		for (int i = 1; i < nodes.length; i++){
 			leftmostChild.makeSibling(nodes[i]);
 		}
@@ -36,7 +30,7 @@ public class AST {
 		ASTNode node3 = new ASTNode("3");
 		
 		ASTNode node4 = new ASTNode("4");
-		ClassDeclNode node5 = new ClassDeclNode("5");
+		ASTNode node5 = new ASTNode("5");
 		node4.makeSibling(node5);
 		node1.adoptChildren(node5);
 		

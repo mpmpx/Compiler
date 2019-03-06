@@ -5,7 +5,7 @@ import java.nio.file.Paths;
 import java.util.LinkedList;
 import java.util.List;
 
-import AST.AST;
+import AST.*;
 import lexer.Scanner;
 import token.Token;
 import token.TokenType;
@@ -80,6 +80,26 @@ public class Parser {
 		}
 	}
 	
+	private boolean match(TokenType tokenType, ASTNode node) {
+		if (lookahead.type == tokenType) {
+			switch (tokenType) {
+				case ID: node = new IdNode("id", lookahead.value); break;
+				case FLOAT_NUM:
+				case INT_NUM: node = new NumNode("num", lookahead.value); break;
+			default:
+				break;
+			}
+			
+			nextToken();
+			return true;
+		}
+		else {
+			error("Syntax error at line " + lookahead.lineNum + ". Expected (terminal: " + tokenType + ").");
+			nextToken();
+			return false;
+		}
+	}
+	
 	private boolean skipErrors(NonTerminal nonTerminal) 
 	{
 		LinkedList<TokenType> firstSet = firstSet(nonTerminal);
@@ -89,21 +109,22 @@ public class Parser {
 		}
 		else {
 			error("Syntax error at line " + lookahead.lineNum  + ". Expected (non-terminal: " + nonTerminal + ").");
-			while (!firstSet.contains(lookahead.type) & !followSet.contains(lookahead.type)) {
+			while (!firstSet.contains(lookahead.type) & !followSet.contains(lookahead.type) & lookahead.type != TokenType.EOF) {
 				nextToken();
 				if (firstSet.contains(TokenType.EPSILON) & followSet.contains(lookahead.type)) {
 					return false;
 				}
 			}
 			
-			return false;
+			return true;
 		}
 	}
 	
 	public boolean parse() {
 		ast = new AST();
+		ASTNode node = null;
 		nextToken();
-		if (prog() & match(TokenType.EOF)) {
+		if (prog(node) & match(TokenType.EOF)) {
 			errorWriter.close();
 			outputWriter.close();
 			scanner.close();
@@ -118,12 +139,19 @@ public class Parser {
 
 	}
 	
-	private boolean prog() { 
+	private boolean prog(ASTNode node) { 
 	// prog -> classDeclList funcDefList 'main' funcBody ';'
+		
+		ClassListNode classListNode = null;
+		FuncDefListNode funcDefListNode = null;
+		StatBlockNode statBlockNode = null;
+		
 		if (!skipErrors(NonTerminal.prog)) return false;
-		if (firstSetContains(NonTerminal.classDeclList)) {
+		if (firstSetContains(NonTerminal.classDeclList) | followSetContains(NonTerminal.classDeclList) | followSetContains(NonTerminal.funcDeclList)) {
 			write("prog -> classDeclList funcDefList 'main' funcBody ';'");
-			if (classDeclList() & funcDefList() & match(TokenType.MAIN) & funcBody() & match(TokenType.SEMICOLON)) {
+			if (classDeclList(classListNode) & funcDefList(funcDefListNode) & match(TokenType.MAIN) & funcBody(statBlockNode) & match(TokenType.SEMICOLON)) {
+				
+				node = AST.makeFamily("prog", classListNode, funcDefListNode, statBlockNode);
 				return true;
 			}
 			else {
@@ -135,15 +163,20 @@ public class Parser {
 		}
 	}
 	
-	private boolean classDecl() {
+	private boolean classDecl(ASTNode node) {
 	// classDecl -> 'class' 'id' extendClass '{' varOrfuncDeclList '}' ';'
+		IdNode idNode = null;
+		InherListNode inherListNode = null;
+		MembListNode memberListNode = null;
+		
 		if (!skipErrors(NonTerminal.classDecl)) return false;
 		if (firstSetContains(TokenType.CLASS)) {
 			write("classDecl -> 'class' 'id' extendClass '{' varOrfuncDeclList '}' ';'");
-			if (match(TokenType.CLASS) & match(TokenType.ID) & extendClass() &
-					match(TokenType.LBRACE) & varOrfuncDeclList() & 
+			if (match(TokenType.CLASS) & match(TokenType.ID, idNode) & extendClass(inherListNode) &
+					match(TokenType.LBRACE) & varOrfuncDeclList(memberListNode) & 
 					match(TokenType.RBRACE) & match(TokenType.SEMICOLON)) {
 				
+				node = AST.makeFamily("classDecl", idNode, inherListNode, memberListNode);
 				return true;
 			}
 			else {
@@ -155,12 +188,17 @@ public class Parser {
 		}
 	}
 	
-	private boolean classDeclList() {
+	private boolean classDeclList(ASTNode node) {
 	// classDeclList -> classDecl classDeclList | EPSILON
+		
+		ClassListNode classListNode = null;
+		ClassDeclNode classDeclNode = null;
+		
 		if (!skipErrors(NonTerminal.classDeclList)) return false;
 		if (firstSetContains(NonTerminal.classDecl)) {
 			write("classDeclList -> classDecl classDeclList");
-			if (classDecl() & classDeclList()) {
+			if (classDecl(classDeclNode) & classDeclList(classListNode)) {
+				node = AST.makeFamily("classList", classDeclNode, null);
 				return true;
 			}
 			else {
@@ -169,6 +207,7 @@ public class Parser {
 		}
 		else if (followSetContains(NonTerminal.classDeclList)) {
 			write("classDeclList -> EPSILON");
+			node = new ClassListNode("classList");
 			return true;
 		}
 		else {
@@ -176,12 +215,17 @@ public class Parser {
 		}
 	}
 	
-	private boolean varOrfuncDeclTail() {
+	private boolean varOrfuncDeclTail(ASTNode node) {
+		DimListNode dimListNode = null;
+		FparamListNode fParamListNode = null;
+		
+		
 	// varOrfuncDeclTail -> arraySizeList | '(' fParams ')'
 		if (!skipErrors(NonTerminal.varOrfuncDeclTail)) return false;
 		if (firstSetContains(NonTerminal.arraySizeList)) {
 			write("varOrfuncDeclTail -> arraySizeList");
-			if (arraySizeList()) {
+			if (arraySizeList(dimListNode)) {
+				node = dimListNode;
 				return true;
 			}
 			else {
@@ -190,7 +234,8 @@ public class Parser {
 		}
 		else if (firstSetContains(TokenType.LPAREN)){
 			write("varOrfuncDeclTail -> '(' fParams ')'");
-			if (match(TokenType.LPAREN) & fParams() & match(TokenType.RPAREN)) {
+			if (match(TokenType.LPAREN) & fParams(fParamListNode) & match(TokenType.RPAREN)) {
+				node = fParamListNode;
 				return true;
 			}
 			else {
@@ -199,7 +244,8 @@ public class Parser {
 		}
 		else if (followSetContains(NonTerminal.varOrfuncDeclTail)) {
 			write("varOrfuncDeclTail -> arraySizeList");
-			if (arraySizeList()) {
+			if (arraySizeList(dimListNode)) {
+				node = AST.makeNode();
 				return true;
 			}
 			else {
@@ -211,14 +257,22 @@ public class Parser {
 		}
 	}
 	
-	private boolean varOrfuncDeclList() {
+	private boolean varOrfuncDeclList(ASTNode node) {
 	// varOrfuncDeclList -> type 'id' varOrfuncDeclTail ';' varOrfuncDeclList 
 	//	| EPSILON
+		MembListNode membListNode = null;
+		TypeNode typeNode = null;
+		IdNode idNode = null;
+		ASTNode dimOrfParamListNode = null;
+		
 		if (!skipErrors(NonTerminal.varOrfuncDeclList)) return false;
 		if (firstSetContains(NonTerminal.type)) {
 			write("varOrfuncDeclList -> type 'id' varOrfuncDeclTail ';' varOrfuncDeclList");
-			if (type() & match(TokenType.ID) & varOrfuncDeclTail() &
-					match(TokenType.SEMICOLON) & varOrfuncDeclList()) {
+			if (type(typeNode) & match(TokenType.ID, idNode) & varOrfuncDeclTail(dimOrfParamListNode) &
+					match(TokenType.SEMICOLON) & varOrfuncDeclList(membListNode)) {
+				
+				MembDeclNode membDeclNode = (MembDeclNode) AST.makeFamily("membDecl", typeNode, idNode, null);
+				node = AST.makeFamily("membList", membDeclNode, null);
 				return true;
 			}
 			else {
@@ -235,12 +289,16 @@ public class Parser {
 	}
 	
 	
-	private boolean extendClass() {
+	private boolean extendClass(ASTNode node) {
 	// extendClass -> ':' 'id' idList | EPSILON
+		ASTNode idListNode = null;
+		IdNode idNode = null;
+		
 		if (!skipErrors(NonTerminal.extendClass)) return false;
 		if (firstSetContains(TokenType.COLON)) {
 			write("extendClass -> ':' 'id' idList");
-			if (match(TokenType.COLON) & match(TokenType.ID) & idList()) {
+			if (match(TokenType.COLON) & match(TokenType.ID, idNode) & idList(idListNode)) {
+				node = AST.makeFamily("inherList", idNode, idListNode);
 				return true;
 			}
 			else {
@@ -256,12 +314,14 @@ public class Parser {
 		}
 	}
 	
-	private boolean idList() {
+	private boolean idList(ASTNode node) {
 	// idList -> ',' 'id' idList | EPSILON
+		IdNode idNode = null;
 		if (!skipErrors(NonTerminal.idList)) return false;
 		if (firstSetContains(TokenType.COMMA)) {
 			write("idList -> ',' 'id' idList");
-			if (match(TokenType.COMMA) & match(TokenType.ID) & idList()) {
+			if (match(TokenType.COMMA) & match(TokenType.ID, idNode) & idList(node)) {
+				node = idNode.makeSibling(node);
 				return true;
 			}
 			else {
@@ -277,13 +337,20 @@ public class Parser {
 		}
 	}
 	
-	private boolean funcHead() {
+	private boolean funcHead(ASTNode node) {
 	// funcHead -> type 'id' classScope '(' fParams ')'
+		TypeNode typeNode = null;
+		IdNode idNode = null;
+		ScopeSpecNode scopeSpecNode = null;
+		FparamListNode fParamListNode = null;
+		
 		if (!skipErrors(NonTerminal.funcHead)) return false;
 		if (firstSetContains(NonTerminal.type)) {
 			write("funcHead -> type 'id' classScope '(' fParams ')'");
-			if (type() & match(TokenType.ID) & classScope() &
-					match(TokenType.LPAREN) & fParams() & match(TokenType.RPAREN)) {
+			if (type(typeNode) & match(TokenType.ID, idNode) & classScope(scopeSpecNode) &
+					match(TokenType.LPAREN) & fParams(fParamListNode) & match(TokenType.RPAREN)) {
+				
+				node = typeNode;
 				return true;
 			}
 			else {
@@ -295,12 +362,14 @@ public class Parser {
 		}
 	}
 	
-	private boolean classScope() {
+	private boolean classScope(ASTNode node) {
 	// classScope -> 'sr' 'id' | EPSILON
+		IdNode idNode = null;
 		if (!skipErrors(NonTerminal.classScope)) return false;
 		if (firstSetContains(TokenType.SR)) {
 			write("classScope -> 'sr' 'id'");
 			if (match(TokenType.SR) & match(TokenType.ID)) {
+				node = AST.makeFamily("scopeNode", idNode);
 				return true;
 			}
 			else {
@@ -316,12 +385,17 @@ public class Parser {
 		}
 	}
 	
-	private boolean funcDef() {
+	private boolean funcDef(ASTNode node) {
 	// funcDef -> funcHead funcBody ';'
+		ASTNode funcHeadNode = null;
+		StatBlockNode statBlockNode = null;
+		
 		if (!skipErrors(NonTerminal.funcDef)) return false;
 		if (firstSetContains(NonTerminal.funcHead)) {
 			write("funcDef -> funcHead funcBody ';'");
-			if (funcHead() & funcBody() & match(TokenType.SEMICOLON)) {
+			if (funcHead(funcHeadNode) & funcBody(statBlockNode) & match(TokenType.SEMICOLON)) {
+				
+				node = AST.makeFamily("funcDef", funcHeadNode, statBlockNode);
 				return true;
 			}
 			else {
@@ -333,12 +407,16 @@ public class Parser {
 		}
 	}
 	
-	private boolean funcDefList() {
+	private boolean funcDefList(ASTNode node) {
 	// funcDefList -> funcDef funcDefList | EPSILON	
+		FuncDefNode funcDefNode = null;
+		FuncDefListNode funcDefListNode = null;
+		
 		if (!skipErrors(NonTerminal.funcDefList)) return false;
 		if (firstSetContains(NonTerminal.funcDef)) {
 			write("funcDefList -> funcDef funcDefList");
-			if (funcDef() & funcDefList()) {
+			if (funcDef(funcDefNode) & funcDefList(funcDefListNode)) {
+				node = AST.makeFamily("funcDefList", funcDefNode, null);
 				return true;
 			}
 			else {
@@ -347,6 +425,7 @@ public class Parser {
 		}
 		else if (followSetContains(NonTerminal.funcDefList)) {
 			write("funcDefList -> EPSILON");
+			node = AST.makeNode();
 			return true;
 		}
 		else {
@@ -354,12 +433,15 @@ public class Parser {
 		}
 	}
 	
-	private boolean funcBody() {
+	private boolean funcBody(ASTNode node) {
 	// funcBody -> '{' varstatList'}'
+		StatBlockNode statBlockNode = null;
+		
 		if (!skipErrors(NonTerminal.funcBody)) return false;
 		if (firstSetContains(TokenType.LBRACE)) {
 			write("funcBody -> '{' varstatList'}'");
-			if (match(TokenType.LBRACE) & varstatList() & match(TokenType.RBRACE)) {
+			if (match(TokenType.LBRACE) & varstatList(statBlockNode) & match(TokenType.RBRACE)) {
+				node = statBlockNode;
 				return true;
 			}
 			else {
@@ -371,15 +453,23 @@ public class Parser {
 		}
 	}
 	
-	private boolean varstat() {
+	private boolean varstat(ASTNode node) {
 	// varstat -> 'id' varstatPrime ';'
 	//	 | 'integer' 'id' arraySizeList ';'
 	//	 | 'float' 'id' arraySizeList ';'
-	//	 | statementPrime	
+	//	 | statementPrime
+		
+		IdNode idNode = null;
+		ASTNode varstatPrimeNode = AST.makeNode();
+		
+		
 		if (!skipErrors(NonTerminal.varstat)) return false;
 		if (firstSetContains(TokenType.ID)) {
+			
 			write("varstat -> 'id' varstatPrime ';'");
-			if (match(TokenType.ID) & varstatPrime() & match(TokenType.SEMICOLON)) {
+			if (match(TokenType.ID, idNode) & varstatPrime(node) & match(TokenType.SEMICOLON)) {
+				
+				node = varstatPrimeNode;
 				return true;
 			}
 			else {
@@ -388,7 +478,7 @@ public class Parser {
 		}
 		else if (firstSetContains(TokenType.INTEGER)) {
 			write("varstat -> 'integer' 'id' arraySizeList ';'");
-			if (match(TokenType.INTEGER) & match(TokenType.ID) & arraySizeList() & match(TokenType.SEMICOLON)) {
+			if (match(TokenType.INTEGER) & match(TokenType.ID) & arraySizeList(node) & match(TokenType.SEMICOLON)) {
 				return true;
 			}
 			else {
@@ -397,7 +487,7 @@ public class Parser {
 		}
 		else if (firstSetContains(TokenType.FLOAT)) {
 			write("varstat -> 'float' 'id' arraySizeList ';'");
-			if (match(TokenType.FLOAT) & match(TokenType.ID) & arraySizeList() & match(TokenType.SEMICOLON)) {
+			if (match(TokenType.FLOAT) & match(TokenType.ID) & arraySizeList(node) & match(TokenType.SEMICOLON)) {
 				return true;
 			}
 			else {
@@ -406,7 +496,7 @@ public class Parser {
 		}
 		else if (firstSetContains(NonTerminal.statementPrime)) {
 			write("varstat -> statementPrime");
-			if (statementPrime()) {
+			if (statementPrime(node)) {
 				return true;
 			}
 			else {
@@ -418,12 +508,16 @@ public class Parser {
 		}
 	}
 	
-	private boolean varstatList() {
+	private boolean varstatList(ASTNode node) {
 	// varstatList -> varstat varstatList | EPSILON	\
+		StatOrVarDeclNode statOrVarDeclNode = null;
+		StatBlockNode statBlockNode = null;
 		if (!skipErrors(NonTerminal.varstatList)) return false;
 		if (firstSetContains(NonTerminal.varstat)) {
 			write("varstatList -> varstat varstatList");
-			if (varstat() & varstatList()) {
+			if (varstat(statOrVarDeclNode) & varstatList(statBlockNode)) {
+				
+				node = AST.makeFamily("statBlock", statOrVarDeclNode, null);
 				return true;
 			}
 			else {
@@ -432,6 +526,7 @@ public class Parser {
 		}
 		else if (followSetContains(NonTerminal.varstatList)) {
 			write("varstatList -> EPSILON");
+			node = AST.makeNode();
 			return true;
 		}
 		else {
@@ -439,13 +534,18 @@ public class Parser {
 		}
 	}
 	
-	private boolean varstatPrime() {
+	private boolean varstatPrime(ASTNode node) {
 	//varstatPrime -> 'id' arraySizeList
 	//	 | variableTail assignOp expr	
+		DimListNode dimListNode = null;
+		IdNode idNode = null;
+		
 		if (!skipErrors(NonTerminal.varstatPrime)) return false;
 		if (firstSetContains(TokenType.ID)) {
 			write("varstatPrime -> 'id' arraySizeList");
-			if (match(TokenType.ID) & arraySizeList()) {
+			if (match(TokenType.ID, idNode) & arraySizeList(dimListNode)) {
+				
+				//node = AST.makeFamily("varDecl", node.getLeftmostChild(), idNode, dimListNode);
 				return true;
 			}
 			else {
@@ -454,7 +554,13 @@ public class Parser {
 		}
 		else if (firstSetContains(NonTerminal.variableTail) | followSetContains(NonTerminal.variableTail)) {
 			write("varstatPrime -> variableTail assignOp expr");
-			if (variableTail() & assignOp() & expr()) {
+			
+			VarNode varNode =  (VarNode)node;
+			ExprNode exprNode = null;
+			
+			if (variableTail(varNode) & assignOp(node) & expr(exprNode)) {
+				
+				node = AST.makeFamily("assignStat", varNode, exprNode);
 				return true;
 			}
 			else {
@@ -466,7 +572,7 @@ public class Parser {
 		}
 	}
 	
-	private boolean statement() {
+	private boolean statement(ASTNode node) {
 	// statement -> assignStat ';'
 	//	 | 'if' '(' expr ')' 'then' statBlock 'else' statBlock ';'
 	//	 | 'for' '(' type 'id' assignOp expr ';' relExpr ';' assignStat ')' statBlock ';'
@@ -476,7 +582,7 @@ public class Parser {
 		if (!skipErrors(NonTerminal.statement)) return false;
 		if (firstSetContains(NonTerminal.assignStat)) {
 			write("statement -> assignStat ';'");
-			if (assignStat() & match(TokenType.SEMICOLON)) {
+			if (assignStat(node) & match(TokenType.SEMICOLON)) {
 				return true;
 			}
 			else {
@@ -485,9 +591,9 @@ public class Parser {
 		}
 		else if (firstSetContains(TokenType.IF)) {
 			write("statement -> 'if' '(' expr ')' 'then' statBlock 'else' statBlock ';'");
-			if (match(TokenType.IF) & match(TokenType.LPAREN) & expr() &
-					match(TokenType.RPAREN) & match(TokenType.THEN) & statBlock() &
-					match(TokenType.ELSE) & statBlock() & match(TokenType.SEMICOLON)) {
+			if (match(TokenType.IF) & match(TokenType.LPAREN) & expr(node) &
+					match(TokenType.RPAREN) & match(TokenType.THEN) & statBlock(node) &
+					match(TokenType.ELSE) & statBlock(node) & match(TokenType.SEMICOLON)) {
 				return true;
 			}
 			else {
@@ -496,10 +602,10 @@ public class Parser {
 		}
 		else if (firstSetContains(TokenType.FOR)) {
 			write("statement -> 'for' '(' type 'id' assignOp expr ';' relExpr ';' assignStat ')' statBlock ';'");
-			if (match(TokenType.FOR) & match(TokenType.LPAREN) & type() & match(TokenType.ID) &
-					assignOp() & expr() & match(TokenType.SEMICOLON) & relExpr() & 
-					match(TokenType.SEMICOLON) & assignStat() & match(TokenType.RPAREN) &
-					statBlock() & match(TokenType.SEMICOLON)) {
+			if (match(TokenType.FOR) & match(TokenType.LPAREN) & type(node) & match(TokenType.ID) &
+					assignOp(node) & expr(node) & match(TokenType.SEMICOLON) & relExpr(node) & 
+					match(TokenType.SEMICOLON) & assignStat(node) & match(TokenType.RPAREN) &
+					statBlock(node) & match(TokenType.SEMICOLON)) {
 				return true;
 			}
 			else {
@@ -508,7 +614,7 @@ public class Parser {
 		}
 		else if (firstSetContains(TokenType.READ)) {
 			write("statement -> 'read' '(' variable ')' ';'");
-			if (match(TokenType.READ) & match(TokenType.LPAREN) & variable() & 
+			if (match(TokenType.READ) & match(TokenType.LPAREN) & variable(node) & 
 					match(TokenType.RPAREN) & match(TokenType.SEMICOLON)) {
 				return true;
 			}
@@ -518,7 +624,7 @@ public class Parser {
 		}
 		else if (firstSetContains(TokenType.WRITE)) {
 			write("statement -> 'write' '(' expr ')' ';'");
-			if (match(TokenType.WRITE) & match(TokenType.LPAREN) & expr() &
+			if (match(TokenType.WRITE) & match(TokenType.LPAREN) & expr(node) &
 					match(TokenType.RPAREN) & match(TokenType.SEMICOLON)) {
 				return true;
 			}
@@ -528,7 +634,7 @@ public class Parser {
 		}
 		else if (firstSetContains(TokenType.RETURN)) {
 			write("statement -> 'return' '(' expr ')' ';'");
-			if (match(TokenType.RETURN) & match(TokenType.LPAREN) & expr() &
+			if (match(TokenType.RETURN) & match(TokenType.LPAREN) & expr(node) &
 					match(TokenType.RPAREN) & match(TokenType.SEMICOLON)) {
 				return true;
 			}
@@ -541,12 +647,12 @@ public class Parser {
 		}
 	}
 	
-	private boolean statementList() {
+	private boolean statementList(ASTNode node) {
 	// statementList -> statement statementList | EPSILON
 		if (!skipErrors(NonTerminal.statementList)) return false;
 		if (firstSetContains(NonTerminal.statement)) {
 			write("statementList -> statement statementList");
-			if (statement() & statementList()) {
+			if (statement(node) & statementList(node)) {
 				return true;
 			}
 			else {
@@ -562,7 +668,7 @@ public class Parser {
 		}
 	}
 	
-	private boolean statementPrime() {
+	private boolean statementPrime(ASTNode node) {
 	// statementPrime -> 'if' '(' expr ')' 'then' statBlock 'else' statBlock ';'
 	//	 | 'for' '(' type 'id' assignOp expr ';' relExpr ';' assignStat ')' statBlock ';'
 	//	 | 'read' '(' variable ')' ';'
@@ -571,9 +677,9 @@ public class Parser {
 		if (!skipErrors(NonTerminal.statementPrime)) return false;
 		if (firstSetContains(TokenType.IF)) {
 			write("statementPrime -> 'if' '(' expr ')' 'then' statBlock 'else' statBlock ';'");
-			if (match(TokenType.IF) & match(TokenType.LPAREN) & expr() &
-					match(TokenType.RPAREN) & match(TokenType.THEN) & statBlock() &
-					match(TokenType.ELSE) & statBlock()) {
+			if (match(TokenType.IF) & match(TokenType.LPAREN) & expr(node) &
+					match(TokenType.RPAREN) & match(TokenType.THEN) & statBlock(node) &
+					match(TokenType.ELSE) & statBlock(node)) {
 				return true;
 			}
 			else {
@@ -582,10 +688,10 @@ public class Parser {
 		}
 		else if (firstSetContains(TokenType.FOR)) {
 			write("statementPrime -> 'for' '(' type 'id' assignOp expr ';' relExpr ';' assignStat ')' statBlock ';'");
-			if (match(TokenType.FOR) & match(TokenType.LPAREN) & type() & match(TokenType.ID) &
-					assignOp() & expr() & match(TokenType.SEMICOLON) & relExpr() & 
-					match(TokenType.SEMICOLON) & assignStat() & match(TokenType.RPAREN) &
-					statBlock() & match(TokenType.SEMICOLON)) {
+			if (match(TokenType.FOR) & match(TokenType.LPAREN) & type(node) & match(TokenType.ID) &
+					assignOp(node) & expr(node) & match(TokenType.SEMICOLON) & relExpr(node) & 
+					match(TokenType.SEMICOLON) & assignStat(node) & match(TokenType.RPAREN) &
+					statBlock(node) & match(TokenType.SEMICOLON)) {
 				return true;
 			}
 			else {
@@ -594,7 +700,7 @@ public class Parser {
 		}
 		else if (firstSetContains(TokenType.READ)) {
 			write("statementPrime -> 'read' '(' variable ')' ';'");
-			if (match(TokenType.READ) & match(TokenType.LPAREN) & variable() & 
+			if (match(TokenType.READ) & match(TokenType.LPAREN) & variable(node) & 
 					match(TokenType.RPAREN) & match(TokenType.SEMICOLON)) {
 				return true;
 			}
@@ -604,7 +710,7 @@ public class Parser {
 		}
 		else if (firstSetContains(TokenType.WRITE)) {
 			write("statementPrime -> 'write' '(' expr ')' ';'");
-			if (match(TokenType.WRITE) & match(TokenType.LPAREN) & expr() &
+			if (match(TokenType.WRITE) & match(TokenType.LPAREN) & expr(node) &
 					match(TokenType.RPAREN) & match(TokenType.SEMICOLON)) {
 				return true;
 			}
@@ -614,7 +720,7 @@ public class Parser {
 		}
 		else if (firstSetContains(TokenType.RETURN)) {
 			write("statementPrime -> 'return' '(' expr ')' ';'");
-			if (match(TokenType.RETURN) & match(TokenType.LPAREN) & expr() &
+			if (match(TokenType.RETURN) & match(TokenType.LPAREN) & expr(node) &
 					match(TokenType.RPAREN) & match(TokenType.SEMICOLON)) {
 				return true;
 			}
@@ -627,12 +733,12 @@ public class Parser {
 		}
 	}
 	
-	private boolean assignStat() {
+	private boolean assignStat(ASTNode node) {
 	// assignStat -> variable assignOp expr	
 		if (!skipErrors(NonTerminal.assignStat)) return false;
 		if (firstSetContains(NonTerminal.variable)) {
 			write("assignStat -> variable assignOp expr");
-			if (variable() & assignOp() & expr()) {
+			if (variable(node) & assignOp(node) & expr(node)) {
 				return true;
 			}
 			else {
@@ -644,12 +750,12 @@ public class Parser {
 		}
 	}
 	
-	private boolean statBlock() {
+	private boolean statBlock(ASTNode node) {
 	// statBlock -> '{' statementList '}' | statement | EPSILON	
 		if (!skipErrors(NonTerminal.statBlock)) return false;
 		if (firstSetContains(TokenType.LBRACE)) {
 			write("statBlock -> '{' statementList '}'");
-			if (match(TokenType.LBRACE) & statementList() & match(TokenType.RBRACE)) {
+			if (match(TokenType.LBRACE) & statementList(node) & match(TokenType.RBRACE)) {
 				return true;
 			}
 			else {
@@ -658,7 +764,7 @@ public class Parser {
 		}
 		else if (firstSetContains(NonTerminal.statement)) {
 			write("statBlock -> statement");
-			if (statement()) {
+			if (statement(node)) {
 				return true;
 			}
 			else {
@@ -674,12 +780,12 @@ public class Parser {
 		}
 	}
 	
-	private boolean expr() {
+	private boolean expr(ASTNode node) {
 	// expr -> arithExpr exprTail	
 		if (!skipErrors(NonTerminal.expr)) return false;
 		if (firstSetContains(NonTerminal.arithExpr)) {
 			write("expr -> arithExpr exprTail");
-			if (arithExpr() & exprTail()) {
+			if (arithExpr(node) & exprTail(node)) {
 				return true;
 			}
 			else {
@@ -691,12 +797,12 @@ public class Parser {
 		}
 	}
 	
-	private boolean exprTail() {
+	private boolean exprTail(ASTNode node) {
 	// exprTail -> relOp arithExpr | EPSILON	
 		if (!skipErrors(NonTerminal.exprTail)) return false;
 		if (firstSetContains(NonTerminal.relOp)) {
 			write("exprTail -> relOp arithExpr");
-			if (relOp() & arithExpr()) {
+			if (relOp(node) & arithExpr(node)) {
 				return true;
 			}
 			else {
@@ -712,12 +818,12 @@ public class Parser {
 		}
 	}
 	
-	private boolean relExpr() {
+	private boolean relExpr(ASTNode node) {
 	// relExpr -> arithExpr relOp arithExpr	
 		if (!skipErrors(NonTerminal.relExpr)) return false;
 		if (firstSetContains(NonTerminal.arithExpr)) {
 			write("elExpr -> arithExpr relOp arithExpr");
-			if (arithExpr() & relOp() & arithExpr()) {
+			if (arithExpr(node) & relOp(node) & arithExpr(node)) {
 				return true;
 			}
 			else {
@@ -729,12 +835,12 @@ public class Parser {
 		}
 	}
 	
-	private boolean arithExpr() {
+	private boolean arithExpr(ASTNode node) {
 	// arithExpr -> term arithExprTail	
 		if (!skipErrors(NonTerminal.arithExpr)) return false;
 		if (firstSetContains(NonTerminal.term)) {
 			write("arithExpr -> term arithExprTail");
-			if (term() & arithExprTail()) {
+			if (term(node) & arithExprTail(node)) {
 				return true;
 			}
 			else {
@@ -746,12 +852,12 @@ public class Parser {
 		}
 	}
 	
-	private boolean arithExprTail() {
+	private boolean arithExprTail(ASTNode node) {
 	// arithExprTail -> addOp term arithExprTail | EPSILON
 		if (!skipErrors(NonTerminal.arithExprTail)) return false;
 		if (firstSetContains(NonTerminal.addOp)) {
 			write("arithExprTail -> addOp term arithExprTail");
-			if (addOp() & term() & arithExprTail()) {
+			if (addOp(node) & term(node) & arithExprTail(node)) {
 				return true;
 			}
 			else {
@@ -767,7 +873,7 @@ public class Parser {
 		}
 	}
 	
-	private boolean sign() {
+	private boolean sign(ASTNode node) {
 	// sign -> '+' | '-'	
 		if (!skipErrors(NonTerminal.sign)) return false;
 		if (firstSetContains(TokenType.ADD)) {
@@ -793,12 +899,12 @@ public class Parser {
 		}
 	}
 	
-	private boolean term() {
+	private boolean term(ASTNode node) {
 	// term -> factor termTail	
 		if (!skipErrors(NonTerminal.term)) return false;
 		if (firstSetContains(NonTerminal.factor)) {
 			write("term -> factor termTail");
-			if (factor() & termTail()) {
+			if (factor(node) & termTail(node)) {
 				return true;
 			}
 			else {
@@ -810,12 +916,12 @@ public class Parser {
 		}
 	}
 	
-	private boolean termTail() {
+	private boolean termTail(ASTNode node) {
 	// termTail -> multOp factor termTail | EPSILON
 		if (!skipErrors(NonTerminal.termTail)) return false;
 		if (firstSetContains(NonTerminal.multOp)) {
 			write("termTail -> multOp factor termTail");
-			if (multOp() & factor() & termTail()) {
+			if (multOp(node) & factor(node) & termTail(node)) {
 				return true;
 			}
 			else {
@@ -831,7 +937,7 @@ public class Parser {
 		}
 	}
 
-	private boolean factor() {
+	private boolean factor(ASTNode node) {
 	// factor -> factorTemp 
 	//	 | 'int_num' | 'float_num'
 	//	 | '(' arithExpr ')'
@@ -840,7 +946,7 @@ public class Parser {
 		if (!skipErrors(NonTerminal.factor)) return false;
 		if (firstSetContains(NonTerminal.factorTemp)) {
 			write("factor -> factorTemp");
-			if (factorTemp()) {
+			if (factorTemp(node)) {
 				return true;
 			}
 			else {
@@ -867,7 +973,7 @@ public class Parser {
 		}
 		else if (firstSetContains(TokenType.LPAREN)) {
 			write("factor -> '(' arithExpr ')'");
-			if (match(TokenType.LPAREN) & arithExpr() & match(TokenType.RPAREN)) {
+			if (match(TokenType.LPAREN) & arithExpr(node) & match(TokenType.RPAREN)) {
 				return true;
 			}
 			else {
@@ -876,7 +982,7 @@ public class Parser {
 		}
 		else if (firstSetContains(TokenType.NOT)) {
 			write("factor -> 'not' factor");
-			if (match(TokenType.NOT) & factor()) {
+			if (match(TokenType.NOT) & factor(node)) {
 				return true;
 			}
 			else {
@@ -885,7 +991,7 @@ public class Parser {
 		}
 		else if (firstSetContains(NonTerminal.sign)) {
 			write("factor -> sign factor");
-			if (sign() & factor()) {
+			if (sign(node) & factor(node)) {
 				return true;
 			}
 			else {
@@ -897,12 +1003,12 @@ public class Parser {
 		}
 	}
 	
-	private boolean factorTemp() {
+	private boolean factorTemp(ASTNode node) {
 	// factorTemp -> 'id' factorPrime	
 		if (!skipErrors(NonTerminal.factorTemp)) return false;
 		if (firstSetContains(TokenType.ID)) {
 			write("factorTemp -> 'id' factorPrime");
-			if (match(TokenType.ID) & factorPrime()) {
+			if (match(TokenType.ID) & factorPrime(node)) {
 				return true;
 			}
 			else {
@@ -914,13 +1020,13 @@ public class Parser {
 		}
 	}
 	
-	private boolean factorPrime() {
+	private boolean factorPrime(ASTNode node) {
 	// factorPrime -> indiceList factorTempTemp 
 	//	 | '(' aParams ')' factorTempTemp	
 		if (!skipErrors(NonTerminal.factorPrime)) return false;
 		if (firstSetContains(NonTerminal.indiceList)) {
 			write("actorPrime -> indiceList factorTempTemp");
-			if (indiceList() & factorTempTemp()) {
+			if (indiceList(node) & factorTempTemp(node)) {
 				return true;
 			}
 			else {
@@ -929,8 +1035,8 @@ public class Parser {
 		}
 		else if (firstSetContains(TokenType.LPAREN)) {
 			write("factorPrime -> '(' aParams ')' factorTempTemp");
-			if (match(TokenType.LPAREN) & aParams() & match(TokenType.RPAREN) &
-					factorTempTemp()) {
+			if (match(TokenType.LPAREN) & aParams(node) & match(TokenType.RPAREN) &
+					factorTempTemp(node)) {
 				return true;
 			}
 			else {
@@ -939,7 +1045,7 @@ public class Parser {
 		}
 		else if (followSetContains(NonTerminal.factorPrime) | followSetContains(NonTerminal.indiceList)) {
 			write("factorPrime -> indiceList factorTempTemp");
-			if (indiceList() & factorTempTemp()) {
+			if (indiceList(node) & factorTempTemp(node)) {
 				return true;
 			}
 			else {
@@ -951,12 +1057,12 @@ public class Parser {
 			return false;
 		}
 	}
-	private boolean factorTempTemp() {
+	private boolean factorTempTemp(ASTNode node) {
 	// factorTempTemp -> '.' factorTemp | EPSILON 	
 		if (!skipErrors(NonTerminal.factorTempTemp)) return false;
 		if (firstSetContains(TokenType.DOT)) {
 			write("factorTempTemp -> '.' factorTemp");
-			if (match(TokenType.DOT) & factorTemp()) {
+			if (match(TokenType.DOT) & factorTemp(node)) {
 				return true;
 			}
 			else {
@@ -971,12 +1077,12 @@ public class Parser {
 			return false;
 		}
 	}
-	private boolean variable() {
+	private boolean variable(ASTNode node) {
 	// variable -> 'id' variableTail 	
 		if (!skipErrors(NonTerminal.variable)) return false;
 		if (firstSetContains(TokenType.ID)) {
 			write("variable -> 'id' variableTail");
-			if (match(TokenType.ID) & variableTail()) {
+			if (match(TokenType.ID) & variableTail(node)) {
 				return true;
 			}
 			else {
@@ -987,13 +1093,14 @@ public class Parser {
 			return false;
 		}
 	}
-	private boolean variableTail() {
+	private boolean variableTail(ASTNode node) {
 	// variableTail -> indiceList variablePrime  
-	//	  | '(' aParams ')' '.' variable  	
+	//	  | '(' aParams ')' '.' variable  
+		
 		if (!skipErrors(NonTerminal.variableTail)) return false;
 		if (firstSetContains(NonTerminal.indiceList)) {
 			write("variableTail -> indiceList variablePrime");
-			if (indiceList() & variablePrime()) {
+			if (indiceList(node) & variablePrime(node)) {
 				return true;
 			}
 			else {
@@ -1002,8 +1109,8 @@ public class Parser {
 		}
 		else if (firstSetContains(TokenType.LPAREN)) {
 			write("variableTail -> '(' aParams ')' '.' variable");
-			if (match(TokenType.LPAREN) & aParams() & match(TokenType.RPAREN) &
-					match(TokenType.DOT) & variable()) {
+			if (match(TokenType.LPAREN) & aParams(node) & match(TokenType.RPAREN) &
+					match(TokenType.DOT) & variable(node)) {
 				return true;
 			}
 			else {
@@ -1012,7 +1119,7 @@ public class Parser {
 		}
 		else if (followSetContains(NonTerminal.variableTail) | followSetContains(NonTerminal.indiceList)) {
 			write("variableTail -> indiceList variablePrime");
-			if (indiceList() & variablePrime()) {
+			if (indiceList(node) & variablePrime(node)) {
 				return true;
 			}
 			else {
@@ -1023,13 +1130,13 @@ public class Parser {
 			return false;
 		}
 	}
-	private boolean variablePrime() {
+	private boolean variablePrime(ASTNode node) {
 	// variablePrime -> '.' variable 
 	//	  | EPSILON 	
 		if (!skipErrors(NonTerminal.variablePrime)) return false;
 		if (firstSetContains(TokenType.DOT)) {
 			write("variablePrime -> '.' variable");
-			if (match(TokenType.DOT) & variable()) {
+			if (match(TokenType.DOT) & variable(node)) {
 				return true;
 			}
 			else {
@@ -1044,12 +1151,12 @@ public class Parser {
 			return false;
 		}
 	}
-	private boolean indice(){
+	private boolean indice(ASTNode node){
 	// indice -> '[' arithExpr ']'	
 		if (!skipErrors(NonTerminal.indice)) return false;
 		if (firstSetContains(TokenType.LBRACKET)) {
 			write("indice -> '[' arithExpr ']'");
-			if (match(TokenType.LBRACKET) & arithExpr() & match(TokenType.RBRACKET)) {
+			if (match(TokenType.LBRACKET) & arithExpr(node) & match(TokenType.RBRACKET)) {
 				return true;
 			}
 			else {
@@ -1060,12 +1167,12 @@ public class Parser {
 			return false;
 		}
 	}
-	private boolean indiceList() {
+	private boolean indiceList(ASTNode node) {
 	// indiceList -> indice indiceList | EPSILON	
 		if (!skipErrors(NonTerminal.indiceList)) return false;
 		if (firstSetContains(NonTerminal.indice)) {
 			write("indiceList -> indice indiceList");
-			if (indice() & indiceList()) {
+			if (indice(node) & indiceList(node)) {
 				return true;
 			}
 			else {
@@ -1080,12 +1187,14 @@ public class Parser {
 			return false;
 		}
 	}
-	private boolean arraySize() {
-	// arraySize -> '[' 'int_num' ']'	
+	private boolean arraySize(ASTNode node) {
+	// arraySize -> '[' 'int_num' ']'
+		NumNode numNode = null;
 		if (!skipErrors(NonTerminal.arraySize)) return false;
 		if (firstSetContains(TokenType.LBRACKET)) {
 			write("arraySize -> '[' 'int_num' ']'");
-			if (match(TokenType.LBRACKET) & match(TokenType.INT_NUM) & match(TokenType.RBRACKET)) {
+			if (match(TokenType.LBRACKET) & match(TokenType.INT_NUM, numNode) & match(TokenType.RBRACKET)) {
+				node = numNode;
 				return true;
 			}
 			else {
@@ -1096,12 +1205,15 @@ public class Parser {
 			return false;
 		}
 	}
-	private boolean arraySizeList() {
+	private boolean arraySizeList(ASTNode node) {
 	// arraySizeList -> arraySize arraySizeList | EPSILON
+		NumNode numNode = null;
+		DimListNode dimListNode = null;
 		if (!skipErrors(NonTerminal.arraySizeList)) return false;
 		if (firstSetContains(NonTerminal.arraySize)) {
 			write("arraySizeList -> arraySize arraySizeList");
-			if (arraySize() & arraySizeList()) {
+			if (arraySize(numNode) & arraySizeList(dimListNode)) {
+				node = AST.makeFamily("dimList", numNode,null);
 				return true;
 			}
 			else {
@@ -1110,18 +1222,20 @@ public class Parser {
 		}
 		else if (followSetContains(NonTerminal.arraySizeList)) {
 			write("arraySizeList -> EPSILON");
+			node = AST.makeNode();
 			return true;
 		}
 		else {
 			return false;
 		}
 	}
-	private boolean type() {
+	private boolean type(ASTNode node) {
 	// type -> 'integer' | 'float' | 'id'	
 		if (!skipErrors(NonTerminal.type)) return false;
 		if (firstSetContains(TokenType.INTEGER)) {
 			write("type -> 'integer'");
 			if (match(TokenType.INTEGER)) {
+				node = AST.makeNode("type");
 				return true;
 			}
 			else {
@@ -1131,6 +1245,7 @@ public class Parser {
 		else if (firstSetContains(TokenType.FLOAT)) {
 			write("type -> 'float'");
 			if (match(TokenType.FLOAT)) {
+				node = AST.makeNode("type");
 				return true;
 			}
 			else {
@@ -1140,6 +1255,7 @@ public class Parser {
 		else if (firstSetContains(TokenType.ID)) {
 			write("type -> 'id'");
 			if (match(TokenType.ID)) {
+				node = AST.makeNode("type");
 				return true;
 			}
 			else {
@@ -1150,12 +1266,20 @@ public class Parser {
 			return false;
 		}
 	}
-	private boolean fParams() {
+	private boolean fParams(ASTNode node) {
 	// fParams -> type 'id' arraySizeList fParamsTailList | EPSILON
+		TypeNode typeNode = null;
+		IdNode idNode = null;
+		DimListNode dimListNode = null;
+		FparamListNode fParamListNode = null;
+		
 		if (!skipErrors(NonTerminal.fParams)) return false;
 		if (firstSetContains(NonTerminal.type)) {
 			write("fParams -> type 'id' arraySizeList fParamsTailList");
-			if (type() & match(TokenType.ID) & arraySizeList() & fParamsTailList()) {
+			if (type(typeNode) & match(TokenType.ID, idNode) & arraySizeList(dimListNode) & fParamsTailList(fParamListNode)) {
+				
+				FparamNode fParamNode = (FparamNode) AST.makeFamily("fParams", typeNode, idNode, dimListNode);
+				node = AST.makeFamily("fParamsList", fParamNode, null);
 				return true;
 			}
 			else {
@@ -1164,18 +1288,24 @@ public class Parser {
 		}
 		else if (followSetContains(NonTerminal.fParams)) {
 			write("fParams ->EPSILON");
+			node = AST.makeNode();
 			return true;
 		}
 		else {
 			return false;
 		}
 	}
-	private boolean fParamsTail() {
+	private boolean fParamsTail(ASTNode node) {
 	// fParamsTail -> ',' type 'id' arraySizeList	
+		TypeNode typeNode = null;
+		IdNode idNode = null;
+		DimListNode dimListNode = null;
+		
 		if (!skipErrors(NonTerminal.fParamsTail)) return false;
 		if (firstSetContains(TokenType.COMMA)) {
 			write("fParamsTail -> ',' type 'id' arraySizeList");
-			if (match(TokenType.COMMA) & type() & match(TokenType.ID) & arraySizeList()) {
+			if (match(TokenType.COMMA) & type(typeNode) & match(TokenType.ID, idNode) & arraySizeList(dimListNode)) {
+				node = AST.makeFamily("fParams", typeNode, idNode, dimListNode);
 				return true;
 			}
 			else {
@@ -1186,12 +1316,16 @@ public class Parser {
 			return false;
 		}
 	}
-	private boolean fParamsTailList() {
+	private boolean fParamsTailList(ASTNode node) {
 	// fParamsTailList -> fParamsTail fParamsTailList | EPSILON	
+		FparamNode fParamNode = null;
+		FparamListNode fParamListNode = null;
+		
 		if (!skipErrors(NonTerminal.fParamsTailList)) return false;
 		if (firstSetContains(NonTerminal.fParamsTail)) {
 			write("fParamsTailList -> fParamsTail fParamsTailList");
-			if (fParamsTail() & fParamsTailList()) {
+			if (fParamsTail(fParamNode) & fParamsTailList(fParamListNode)) {
+				node = AST.makeFamily("fParamsList", fParamNode, fParamListNode.getLeftmostChild());
 				return true;
 			}
 			else {
@@ -1200,18 +1334,19 @@ public class Parser {
 		}
 		else if (followSetContains(NonTerminal.fParamsTailList)) {
 			write("fParamsTailList -> EPSILON");
+			node = AST.makeNode();
 			return true;
 		}
 		else {
 			return false;
 		}
 	}
-	private boolean aParams() {
+	private boolean aParams(ASTNode node) {
 	// aParams -> expr aParamsTailList | EPSILON	
 		if (!skipErrors(NonTerminal.aParams)) return false;
 		if (firstSetContains(NonTerminal.expr)) {
 			write("aParams -> expr aParamsTailList");
-			if (expr() & aParamsTailList()) {
+			if (expr(node) & aParamsTailList(node)) {
 				return true;
 			}
 			else {
@@ -1226,12 +1361,12 @@ public class Parser {
 			return false;
 		}
 	}
-	private boolean aParamsTail() {
+	private boolean aParamsTail(ASTNode node) {
 	// aParamsTail -> ',' expr	
 		if (!skipErrors(NonTerminal.aParamsTail)) return false;
 		if (firstSetContains(TokenType.COMMA)) {
 			write("aParamsTail -> ',' expr");
-			if (match(TokenType.COMMA) & expr()) {
+			if (match(TokenType.COMMA) & expr(node)) {
 				return true;
 			}
 			else {
@@ -1242,12 +1377,12 @@ public class Parser {
 			return false;
 		}
 	}
-	private boolean aParamsTailList() {
+	private boolean aParamsTailList(ASTNode node) {
 	// aParamsTailList -> aParamsTail aParamsTailList | EPSILON
 		if (!skipErrors(NonTerminal.aParamsTailList)) return false;
 		if (firstSetContains(NonTerminal.aParamsTail)) {
 			write("aParamsTailList -> aParamsTail aParamsTailList");
-			if (aParamsTail() & aParamsTailList()) {
+			if (aParamsTail(node) & aParamsTailList(node)) {
 				return true;
 			}
 			else {
@@ -1262,7 +1397,7 @@ public class Parser {
 			return false;
 		}
 	}
-	private boolean assignOp() {
+	private boolean assignOp(ASTNode node) {
 	// assignOp -> '='	
 		if (!skipErrors(NonTerminal.assignOp)) return false;
 		if (firstSetContains(TokenType.ASSIGN)) {
@@ -1278,7 +1413,7 @@ public class Parser {
 			return false;
 		}
 	}
-	private boolean relOp() {
+	private boolean relOp(ASTNode node) {
 	// relOp -> 'eq' | 'neq' | 'lt' | 'gt' | 'leq' | 'geq'	
 		if (!skipErrors(NonTerminal.relOp)) return false;
 		if (firstSetContains(TokenType.EQ)) {
@@ -1339,7 +1474,7 @@ public class Parser {
 			return false;
 		}
 	}
-	private boolean addOp() {
+	private boolean addOp(ASTNode node) {
 	// addOp -> '+' | '-' | 'or'	
 		if (!skipErrors(NonTerminal.addOp)) return false;
 		if (firstSetContains(TokenType.ADD)) {
@@ -1373,7 +1508,7 @@ public class Parser {
 			return false;
 		}
 	}
-	private boolean multOp() {
+	private boolean multOp(ASTNode node) {
 	// multOp -> '*' | '/' | 'and'	
 		if (!skipErrors(NonTerminal.multOp)) return false;
 		if (firstSetContains(TokenType.MUL)) {
