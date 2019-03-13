@@ -3,6 +3,7 @@ package parser;
 import java.io.File;
 import java.nio.file.Paths;
 import java.util.LinkedList;
+import java.util.Stack;
 
 import AST.*;
 import lexer.Scanner;
@@ -36,41 +37,6 @@ public class Parser {
 		fParamsTail, fParamsTailList, aParams, aParamsTail, aParamsTailList,
 		assignOp, relOp, addOp, multOp
 	};
-
-	class Stack<T> {
-		private LinkedList<T> stack;
-		
-		public Stack() {
-			stack = new LinkedList<T>();
-		}
-		
-		public void push(T t) {
-			stack.addFirst(t);
-			print();
-		}
-		
-		public T pop() {
-			if (stack.isEmpty()) {
-				return null;
-			}
-			
-			T t = stack.removeFirst();
-			print();
-			return t;
-		}
-		
-		public T peek() {
-			return stack.getFirst();
-		}
-		
-		private void print() {
-			for (T t : stack) {
-				System.out.println(t);
-			}
-			System.out.println("---------------------");
-		}
-	};
-	
 	
 	public Parser(String fileName) {
 		scanner = new Scanner(fileName);
@@ -176,15 +142,14 @@ public class Parser {
 		}
 	}
 	
-	public boolean parse() {
-		AST ast = null;;
+	public boolean parse(AST ast) {
 		nextToken();
 		if (prog() & match(TokenType.EOF)) {
 			errorWriter.close();
 			outputWriter.close();
 			scanner.close();
-			ast = new AST(stack.pop());
-			ast.print();
+			ast.setRoot(stack.pop());
+			//ast.print();
 			return true;
 		}
 		else {
@@ -931,7 +896,6 @@ public class Parser {
 				ASTNode arithExprTail = stack.peek();
 				if (arithExprTail.getClass().equals(EpsilonNode.class)) {
 					stack.pop();
-					makeFamily("arithExpr", 1);
 					makeFamily("addOp", 2);
 					makeFamily("arithExpr", 1);
 				}
@@ -1088,7 +1052,9 @@ public class Parser {
 		else if (firstSetContains(TokenType.NOT)) {
 			write("factor -> 'not' factor");
 			if (match(TokenType.NOT) & factor()) {
+				makeFamily("factor", 1);
 				makeFamily("not", 1);
+				makeFamily("factor", 1);
 				return true;
 			}
 			else {
@@ -1098,7 +1064,9 @@ public class Parser {
 		else if (firstSetContains(NonTerminal.sign)) {
 			write("factor -> sign factor");
 			if (sign() & factor()) {
+				makeFamily("factor", 1);
 				makeFamily("sign", 1);
+				makeFamily("factor", 1);
 				return true;
 			}
 			else {
@@ -1133,7 +1101,7 @@ public class Parser {
 				}
 				else {
 					stack.push(factorPrime);
-					makeFamily("var", 2);
+					makeFamily("var", 1);
 					makeFamily("factor", 1);
 				}
 				
@@ -1260,13 +1228,21 @@ public class Parser {
 	// variableTail -> indiceList variablePrime  
 	//	  | '(' aParams ')' '.' variable  	
 		if (!skipErrors(NonTerminal.variableTail)) return false;
-		if (firstSetContains(NonTerminal.indiceList)) {
+		if (firstSetContains(NonTerminal.indiceList) | followSetContains(NonTerminal.variableTail) | followSetContains(NonTerminal.indiceList)) {
 			write("variableTail -> indiceList variablePrime");
 			if (indiceList() & variablePrime()) {
 				ASTNode variablePrime = stack.pop();
 				makeFamily("dataMember", 2);
-				stack.push(variablePrime);
-				mergeNode(2);
+				if (!variablePrime.getClass().equals(EpsilonNode.class)) {
+					stack.push(variablePrime.getLeftmostChild());
+					
+					makeFamily("var", 2);
+				}
+				else {
+					makeFamily("var", 1);
+				}
+				
+				
 				return true;
 			}
 			else {
@@ -1282,18 +1258,6 @@ public class Parser {
 				makeFamily("fCall", 2);
 				stack.push(variable);
 				mergeNode(2);
-				return true;
-			}
-			else {
-				return false;
-			}
-		}
-		else if (followSetContains(NonTerminal.variableTail) | followSetContains(NonTerminal.indiceList)) {
-			write("variableTail -> indiceList variablePrime");
-			if (indiceList() & variablePrime()) {
-				stack.pop();
-				stack.pop();
-				makeFamily("var" , 1);
 				return true;
 			}
 			else {
@@ -1348,13 +1312,8 @@ public class Parser {
 		if (firstSetContains(NonTerminal.indice)) {
 			write("indiceList -> indice indiceList");
 			if (indice() & indiceList()) {
-				if (stack.peek().getClass().equals(EpsilonNode.class)) {
-					makeFamily("indexList", 2);
-				}
-				else {
-					stack.push(stack.pop().getLeftmostChild());
-					makeFamily("indexList", 2);
-				}
+				stack.push(stack.pop().getLeftmostChild());
+				makeFamily("indexList", 2);
 				return true;
 			}
 			else {
@@ -1363,6 +1322,7 @@ public class Parser {
 		}
 		else if (followSetContains(NonTerminal.indiceList)) {
 			stack.push(AST.makeNode());
+			makeFamily("indexList", 1);
 			write("indiceList -> EPSILON");
 			return true;
 		}

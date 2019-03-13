@@ -5,6 +5,8 @@ import java.nio.file.Paths;
 import javax.swing.JFileChooser;
 import javax.swing.filechooser.FileSystemView;
 
+import AST.AST;
+
 public class Driver {
 	private String rootDir;
 	private Parser parser;
@@ -29,10 +31,11 @@ public class Driver {
 		if (fileName == null) {
 			selectedFile = selectFile();
 		}
-	
+		AST ast = new AST(AST.makeNode());
 		parser = new Parser(selectedFile);
-		if (parser.parse()) {
+		if (parser.parse(ast)) {
 			System.out.println("No Error");
+			ast.print();
 		}
 		else {
 			System.out.println("Parsing fails.");
@@ -58,7 +61,7 @@ public class Driver {
 		if (args.length == 0) {
 			driver.run(null);
 		} else {
-			driver.run(args[1]);
+			driver.run(args[0]);
 		}
 	}
 }

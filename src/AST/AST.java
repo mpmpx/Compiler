@@ -8,6 +8,10 @@ public class AST {
 		 this.root = root;
 	}
 	
+	public void setRoot(ASTNode root) {
+		this.root = root;
+	}
+	
 	public static ASTNode makeNode() {
 		return new EpsilonNode();
 	}
