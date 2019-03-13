@@ -3,9 +3,9 @@ package parser;
 import java.io.File;
 import java.nio.file.Paths;
 import java.util.LinkedList;
-import java.util.List;
+import java.util.Stack;
 
-import AST.AST;
+import AST.*;
 import lexer.Scanner;
 import token.Token;
 import token.TokenType;
@@ -15,7 +15,6 @@ public class Parser {
 
 	private Scanner scanner;
 	private Token lookahead;
-	private AST ast;
 	
 	private String rootDir;
 	private String outputDir;
@@ -23,6 +22,8 @@ public class Parser {
 	
 	private FileWriterWrapper outputWriter;
 	private FileWriterWrapper errorWriter;
+	
+	private Stack<ASTNode> stack;
 	
 	private enum NonTerminal {
 		prog, classDecl, classDeclList, varOrfuncDeclTail, varOrfuncDeclList,
@@ -36,7 +37,7 @@ public class Parser {
 		fParamsTail, fParamsTailList, aParams, aParamsTail, aParamsTailList,
 		assignOp, relOp, addOp, multOp
 	};
-
+	
 	public Parser(String fileName) {
 		scanner = new Scanner(fileName);
 		rootDir = (Paths.get("").toAbsolutePath().toString());
@@ -51,6 +52,42 @@ public class Parser {
 		String errorFileName = outputDir + getFileName(selectedFile) + "_error.txt";
 		outputWriter = new FileWriterWrapper(resultFileName);
 		errorWriter = new FileWriterWrapper(errorFileName);
+		stack = new Stack<ASTNode>();
+	}
+	
+	private void makeFamily(String op, int stackNum) {
+		LinkedList<ASTNode> list = new LinkedList<ASTNode>();
+		for (int i = 0; i < stackNum; i++) {
+			list.addFirst(stack.pop());
+		}
+		
+		ASTNode result = null;
+		for (ASTNode node : list) {
+			if (result == null) {
+				result = node;
+			}
+			else {
+				result.makeSibling(node);
+			}
+		}
+		stack.push(AST.makeFamily(op, result));
+	}
+	
+	private void mergeNode(int num) {
+		LinkedList<ASTNode> list = new LinkedList<ASTNode>();
+		for (int i = 0; i < num; i++) {
+			list.addFirst(stack.pop());
+		}
+		ASTNode result = null;
+		for (ASTNode node : list) {
+			if (result == null) {
+				result = node;
+			}
+			else {
+				result.makeSibling(node);
+			}
+		}
+		stack.push(result);
 	}
 	
 	private void write(String str) {
@@ -70,12 +107,16 @@ public class Parser {
 	
 	private boolean match(TokenType tokenType) {
 		if (lookahead.type == tokenType) {
+			
+			if (tokenType == TokenType.ID) {
+				stack.push(AST.makeNode("id"));
+			}
+			
 			nextToken();
 			return true;
 		}
 		else {
 			error("Syntax error at line " + lookahead.lineNum + ". Expected (terminal: " + tokenType + ").");
-			nextToken();
 			return false;
 		}
 	}
@@ -84,29 +125,31 @@ public class Parser {
 	{
 		LinkedList<TokenType> firstSet = firstSet(nonTerminal);
 		LinkedList<TokenType> followSet = followSet(nonTerminal);
-		if (firstSet.contains(lookahead.type) | (firstSet.contains(TokenType.EPSILON) & followSet.contains(lookahead.type))) {
+		
+		if (firstSet.contains(lookahead.type) | ((firstSet.contains(TokenType.EPSILON) & followSet.contains(lookahead.type)))) {
 			return true;
 		}
 		else {
 			error("Syntax error at line " + lookahead.lineNum  + ". Expected (non-terminal: " + nonTerminal + ").");
-			while (!firstSet.contains(lookahead.type) & !followSet.contains(lookahead.type)) {
+			while (!firstSet.contains(lookahead.type) & !followSet.contains(lookahead.type) & lookahead.type != TokenType.EOF) {
 				nextToken();
 				if (firstSet.contains(TokenType.EPSILON) & followSet.contains(lookahead.type)) {
 					return false;
 				}
 			}
 			
-			return false;
+			return true;
 		}
 	}
 	
-	public boolean parse() {
-		ast = new AST();
+	public boolean parse(AST ast) {
 		nextToken();
 		if (prog() & match(TokenType.EOF)) {
 			errorWriter.close();
 			outputWriter.close();
 			scanner.close();
+			ast.setRoot(stack.pop());
+			//ast.print();
 			return true;
 		}
 		else {
@@ -121,9 +164,10 @@ public class Parser {
 	private boolean prog() { 
 	// prog -> classDeclList funcDefList 'main' funcBody ';'
 		if (!skipErrors(NonTerminal.prog)) return false;
-		if (firstSetContains(NonTerminal.classDeclList)) {
+		if (firstSetContains(NonTerminal.classDeclList) | followSetContains(NonTerminal.classDeclList)) {
 			write("prog -> classDeclList funcDefList 'main' funcBody ';'");
 			if (classDeclList() & funcDefList() & match(TokenType.MAIN) & funcBody() & match(TokenType.SEMICOLON)) {
+				makeFamily("prog", 3);
 				return true;
 			}
 			else {
@@ -144,6 +188,7 @@ public class Parser {
 					match(TokenType.LBRACE) & varOrfuncDeclList() & 
 					match(TokenType.RBRACE) & match(TokenType.SEMICOLON)) {
 				
+				makeFamily("classDecl", 3);
 				return true;
 			}
 			else {
@@ -161,6 +206,8 @@ public class Parser {
 		if (firstSetContains(NonTerminal.classDecl)) {
 			write("classDeclList -> classDecl classDeclList");
 			if (classDecl() & classDeclList()) {
+				stack.push(stack.pop().getLeftmostChild());
+				makeFamily("classList", 2);
 				return true;
 			}
 			else {
@@ -169,6 +216,8 @@ public class Parser {
 		}
 		else if (followSetContains(NonTerminal.classDeclList)) {
 			write("classDeclList -> EPSILON");
+			stack.push(AST.makeNode());
+			makeFamily("classList", 1);
 			return true;
 		}
 		else {
@@ -179,7 +228,7 @@ public class Parser {
 	private boolean varOrfuncDeclTail() {
 	// varOrfuncDeclTail -> arraySizeList | '(' fParams ')'
 		if (!skipErrors(NonTerminal.varOrfuncDeclTail)) return false;
-		if (firstSetContains(NonTerminal.arraySizeList)) {
+		if (firstSetContains(NonTerminal.arraySizeList) | followSetContains(NonTerminal.varOrfuncDeclTail)) {
 			write("varOrfuncDeclTail -> arraySizeList");
 			if (arraySizeList()) {
 				return true;
@@ -191,15 +240,6 @@ public class Parser {
 		else if (firstSetContains(TokenType.LPAREN)){
 			write("varOrfuncDeclTail -> '(' fParams ')'");
 			if (match(TokenType.LPAREN) & fParams() & match(TokenType.RPAREN)) {
-				return true;
-			}
-			else {
-				return false;
-			}
-		}
-		else if (followSetContains(NonTerminal.varOrfuncDeclTail)) {
-			write("varOrfuncDeclTail -> arraySizeList");
-			if (arraySizeList()) {
 				return true;
 			}
 			else {
@@ -219,6 +259,18 @@ public class Parser {
 			write("varOrfuncDeclList -> type 'id' varOrfuncDeclTail ';' varOrfuncDeclList");
 			if (type() & match(TokenType.ID) & varOrfuncDeclTail() &
 					match(TokenType.SEMICOLON) & varOrfuncDeclList()) {
+				
+				ASTNode varOrfuncDeclList = stack.pop().getLeftmostChild();
+				ASTNode varOrfuncDeclTail = stack.peek();
+				if ( varOrfuncDeclTail.getClass().equals(FParamsListNode.class)) {
+					makeFamily("funcDecl", 3);
+				}
+				else {
+					makeFamily("varDecl", 3);
+				}
+				makeFamily("membDecl", 1);
+				stack.push(varOrfuncDeclList);
+				makeFamily("membList", 2);
 				return true;
 			}
 			else {
@@ -226,6 +278,8 @@ public class Parser {
 			}
 		}
 		else if (followSetContains(NonTerminal.varOrfuncDeclList)) {
+			stack.push(AST.makeNode());
+			makeFamily("membList", 1);
 			write("varOrfuncDeclList -> EPSILON");
 			return true;
 		}
@@ -241,6 +295,8 @@ public class Parser {
 		if (firstSetContains(TokenType.COLON)) {
 			write("extendClass -> ':' 'id' idList");
 			if (match(TokenType.COLON) & match(TokenType.ID) & idList()) {
+				mergeNode(2);
+				makeFamily("inherList", 1);
 				return true;
 			}
 			else {
@@ -248,6 +304,8 @@ public class Parser {
 			}
 		}
 		else if (followSetContains(NonTerminal.extendClass)) {
+			stack.push(AST.makeNode());
+			makeFamily("inherList", 1);
 			write("extendClass -> EPSILON");
 			return true;
 		}
@@ -262,6 +320,7 @@ public class Parser {
 		if (firstSetContains(TokenType.COMMA)) {
 			write("idList -> ',' 'id' idList");
 			if (match(TokenType.COMMA) & match(TokenType.ID) & idList()) {
+				mergeNode(2);
 				return true;
 			}
 			else {
@@ -269,6 +328,7 @@ public class Parser {
 			}
 		}
 		else if (followSetContains(NonTerminal.idList)) {
+			stack.push(AST.makeNode());
 			write("idList -> EPSILON");
 			return true;
 		}
@@ -284,6 +344,22 @@ public class Parser {
 			write("funcHead -> type 'id' classScope '(' fParams ')'");
 			if (type() & match(TokenType.ID) & classScope() &
 					match(TokenType.LPAREN) & fParams() & match(TokenType.RPAREN)) {
+				
+				ASTNode fParams = stack.pop();
+				ASTNode node1 = stack.pop();
+				
+
+				if (node1.getClass().equals(EpsilonNode.class)) {
+					ASTNode node2 = stack.pop();
+					stack.push(node1);
+					makeFamily("scopeSpec", 1);
+					stack.push(node2);
+				}
+				else {
+					makeFamily("scopeSpec", 1);
+					stack.push(node1);
+				}
+				stack.push(fParams);
 				return true;
 			}
 			else {
@@ -308,6 +384,7 @@ public class Parser {
 			}
 		}
 		else if (followSetContains(NonTerminal.classScope)) {
+			stack.push(AST.makeNode());
 			write("classScope -> EPSILON");
 			return true;
 		}
@@ -322,6 +399,7 @@ public class Parser {
 		if (firstSetContains(NonTerminal.funcHead)) {
 			write("funcDef -> funcHead funcBody ';'");
 			if (funcHead() & funcBody() & match(TokenType.SEMICOLON)) {
+				makeFamily("funcDef", 5);
 				return true;
 			}
 			else {
@@ -339,6 +417,8 @@ public class Parser {
 		if (firstSetContains(NonTerminal.funcDef)) {
 			write("funcDefList -> funcDef funcDefList");
 			if (funcDef() & funcDefList()) {
+				stack.push(stack.pop().getLeftmostChild());
+				makeFamily("funcDefList", 2);
 				return true;
 			}
 			else {
@@ -347,6 +427,8 @@ public class Parser {
 		}
 		else if (followSetContains(NonTerminal.funcDefList)) {
 			write("funcDefList -> EPSILON");
+			stack.push(AST.makeNode());
+			makeFamily("funcDefList", 1);
 			return true;
 		}
 		else {
@@ -389,6 +471,12 @@ public class Parser {
 		else if (firstSetContains(TokenType.INTEGER)) {
 			write("varstat -> 'integer' 'id' arraySizeList ';'");
 			if (match(TokenType.INTEGER) & match(TokenType.ID) & arraySizeList() & match(TokenType.SEMICOLON)) {
+				ASTNode arraySizeList = stack.pop();
+				ASTNode id = stack.pop();
+				stack.push(AST.makeNode("type"));
+				stack.push(id);
+				stack.push(arraySizeList);
+				makeFamily("varDecl", 3);
 				return true;
 			}
 			else {
@@ -398,6 +486,12 @@ public class Parser {
 		else if (firstSetContains(TokenType.FLOAT)) {
 			write("varstat -> 'float' 'id' arraySizeList ';'");
 			if (match(TokenType.FLOAT) & match(TokenType.ID) & arraySizeList() & match(TokenType.SEMICOLON)) {
+				ASTNode arraySizeList = stack.pop();
+				ASTNode id = stack.pop();
+				stack.push(AST.makeNode("type"));
+				stack.push(id);
+				stack.push(arraySizeList);
+				makeFamily("varDecl", 3);
 				return true;
 			}
 			else {
@@ -424,6 +518,8 @@ public class Parser {
 		if (firstSetContains(NonTerminal.varstat)) {
 			write("varstatList -> varstat varstatList");
 			if (varstat() & varstatList()) {
+				stack.push(stack.pop().getLeftmostChild());
+				makeFamily("statBlock", 2);
 				return true;
 			}
 			else {
@@ -432,6 +528,8 @@ public class Parser {
 		}
 		else if (followSetContains(NonTerminal.varstatList)) {
 			write("varstatList -> EPSILON");
+			stack.push(AST.makeNode());
+			makeFamily("statBlock", 1);
 			return true;
 		}
 		else {
@@ -446,6 +544,13 @@ public class Parser {
 		if (firstSetContains(TokenType.ID)) {
 			write("varstatPrime -> 'id' arraySizeList");
 			if (match(TokenType.ID) & arraySizeList()) {
+				ASTNode arraySizeList = stack.pop();
+				ASTNode id = stack.pop();
+				stack.pop();
+				stack.push(AST.makeNode("type"));
+				stack.push(id);
+				stack.push(arraySizeList);
+				makeFamily("varDecl", 3);
 				return true;
 			}
 			else {
@@ -455,6 +560,7 @@ public class Parser {
 		else if (firstSetContains(NonTerminal.variableTail) | followSetContains(NonTerminal.variableTail)) {
 			write("varstatPrime -> variableTail assignOp expr");
 			if (variableTail() & assignOp() & expr()) {
+				makeFamily("assignStat", 2);
 				return true;
 			}
 			else {
@@ -477,6 +583,7 @@ public class Parser {
 		if (firstSetContains(NonTerminal.assignStat)) {
 			write("statement -> assignStat ';'");
 			if (assignStat() & match(TokenType.SEMICOLON)) {
+				makeFamily("stat", 1);
 				return true;
 			}
 			else {
@@ -488,6 +595,8 @@ public class Parser {
 			if (match(TokenType.IF) & match(TokenType.LPAREN) & expr() &
 					match(TokenType.RPAREN) & match(TokenType.THEN) & statBlock() &
 					match(TokenType.ELSE) & statBlock() & match(TokenType.SEMICOLON)) {
+				makeFamily("ifStat", 3);
+				makeFamily("stat", 1);
 				return true;
 			}
 			else {
@@ -500,6 +609,8 @@ public class Parser {
 					assignOp() & expr() & match(TokenType.SEMICOLON) & relExpr() & 
 					match(TokenType.SEMICOLON) & assignStat() & match(TokenType.RPAREN) &
 					statBlock() & match(TokenType.SEMICOLON)) {
+				makeFamily("forStat", 6);
+				makeFamily("stat", 1);
 				return true;
 			}
 			else {
@@ -510,6 +621,8 @@ public class Parser {
 			write("statement -> 'read' '(' variable ')' ';'");
 			if (match(TokenType.READ) & match(TokenType.LPAREN) & variable() & 
 					match(TokenType.RPAREN) & match(TokenType.SEMICOLON)) {
+				makeFamily("getStat", 1);
+				makeFamily("stat", 1);
 				return true;
 			}
 			else {
@@ -520,6 +633,8 @@ public class Parser {
 			write("statement -> 'write' '(' expr ')' ';'");
 			if (match(TokenType.WRITE) & match(TokenType.LPAREN) & expr() &
 					match(TokenType.RPAREN) & match(TokenType.SEMICOLON)) {
+				makeFamily("putStat", 1);
+				makeFamily("stat", 1);
 				return true;
 			}
 			else {
@@ -530,6 +645,8 @@ public class Parser {
 			write("statement -> 'return' '(' expr ')' ';'");
 			if (match(TokenType.RETURN) & match(TokenType.LPAREN) & expr() &
 					match(TokenType.RPAREN) & match(TokenType.SEMICOLON)) {
+				makeFamily("returnStat", 1);
+				makeFamily("stat", 1);
 				return true;
 			}
 			else {
@@ -547,6 +664,7 @@ public class Parser {
 		if (firstSetContains(NonTerminal.statement)) {
 			write("statementList -> statement statementList");
 			if (statement() & statementList()) {
+				mergeNode(2);
 				return true;
 			}
 			else {
@@ -554,6 +672,7 @@ public class Parser {
 			}
 		}
 		else if (followSetContains(NonTerminal.statementList)) {
+			stack.push(AST.makeNode());
 			write("statementList -> EPSILON");
 			return true;
 		}
@@ -574,6 +693,8 @@ public class Parser {
 			if (match(TokenType.IF) & match(TokenType.LPAREN) & expr() &
 					match(TokenType.RPAREN) & match(TokenType.THEN) & statBlock() &
 					match(TokenType.ELSE) & statBlock()) {
+				makeFamily("ifStat", 3);
+				makeFamily("stat", 1);
 				return true;
 			}
 			else {
@@ -586,6 +707,8 @@ public class Parser {
 					assignOp() & expr() & match(TokenType.SEMICOLON) & relExpr() & 
 					match(TokenType.SEMICOLON) & assignStat() & match(TokenType.RPAREN) &
 					statBlock() & match(TokenType.SEMICOLON)) {
+				makeFamily("forStat", 6);
+				makeFamily("stat", 1);
 				return true;
 			}
 			else {
@@ -596,6 +719,8 @@ public class Parser {
 			write("statementPrime -> 'read' '(' variable ')' ';'");
 			if (match(TokenType.READ) & match(TokenType.LPAREN) & variable() & 
 					match(TokenType.RPAREN) & match(TokenType.SEMICOLON)) {
+				makeFamily("getStat", 1);
+				makeFamily("stat", 1);
 				return true;
 			}
 			else {
@@ -606,6 +731,8 @@ public class Parser {
 			write("statementPrime -> 'write' '(' expr ')' ';'");
 			if (match(TokenType.WRITE) & match(TokenType.LPAREN) & expr() &
 					match(TokenType.RPAREN) & match(TokenType.SEMICOLON)) {
+				makeFamily("putStat", 1);
+				makeFamily("stat", 1);
 				return true;
 			}
 			else {
@@ -616,6 +743,8 @@ public class Parser {
 			write("statementPrime -> 'return' '(' expr ')' ';'");
 			if (match(TokenType.RETURN) & match(TokenType.LPAREN) & expr() &
 					match(TokenType.RPAREN) & match(TokenType.SEMICOLON)) {
+				makeFamily("returnStat", 1);
+				makeFamily("stat", 1);
 				return true;
 			}
 			else {
@@ -633,6 +762,7 @@ public class Parser {
 		if (firstSetContains(NonTerminal.variable)) {
 			write("assignStat -> variable assignOp expr");
 			if (variable() & assignOp() & expr()) {
+				makeFamily("assignStat", 2);
 				return true;
 			}
 			else {
@@ -650,6 +780,7 @@ public class Parser {
 		if (firstSetContains(TokenType.LBRACE)) {
 			write("statBlock -> '{' statementList '}'");
 			if (match(TokenType.LBRACE) & statementList() & match(TokenType.RBRACE)) {
+				makeFamily("statBlock", 1);
 				return true;
 			}
 			else {
@@ -659,6 +790,7 @@ public class Parser {
 		else if (firstSetContains(NonTerminal.statement)) {
 			write("statBlock -> statement");
 			if (statement()) {
+				makeFamily("statBlock", 1);
 				return true;
 			}
 			else {
@@ -666,6 +798,8 @@ public class Parser {
 			}
 		}
 		else if (followSetContains(NonTerminal.statBlock)) {
+			stack.push(AST.makeNode());
+			makeFamily("statBlock", 1);
 			write("statBlock -> EPSILON");
 			return true;
 		}
@@ -680,6 +814,7 @@ public class Parser {
 		if (firstSetContains(NonTerminal.arithExpr)) {
 			write("expr -> arithExpr exprTail");
 			if (arithExpr() & exprTail()) {
+				makeFamily("expr", 1);
 				return true;
 			}
 			else {
@@ -697,6 +832,7 @@ public class Parser {
 		if (firstSetContains(NonTerminal.relOp)) {
 			write("exprTail -> relOp arithExpr");
 			if (relOp() & arithExpr()) {
+				makeFamily("relExpr", 3);
 				return true;
 			}
 			else {
@@ -716,8 +852,9 @@ public class Parser {
 	// relExpr -> arithExpr relOp arithExpr	
 		if (!skipErrors(NonTerminal.relExpr)) return false;
 		if (firstSetContains(NonTerminal.arithExpr)) {
-			write("elExpr -> arithExpr relOp arithExpr");
+			write("relExpr -> arithExpr relOp arithExpr");
 			if (arithExpr() & relOp() & arithExpr()) {
+				makeFamily("relExpr", 3);
 				return true;
 			}
 			else {
@@ -735,6 +872,10 @@ public class Parser {
 		if (firstSetContains(NonTerminal.term)) {
 			write("arithExpr -> term arithExprTail");
 			if (term() & arithExprTail()) {
+				if (stack.peek().getClass().equals(EpsilonNode.class)) {
+					stack.pop();
+					makeFamily("arithExpr", 1);
+				}
 				return true;
 			}
 			else {
@@ -752,6 +893,17 @@ public class Parser {
 		if (firstSetContains(NonTerminal.addOp)) {
 			write("arithExprTail -> addOp term arithExprTail");
 			if (addOp() & term() & arithExprTail()) {
+				ASTNode arithExprTail = stack.peek();
+				if (arithExprTail.getClass().equals(EpsilonNode.class)) {
+					stack.pop();
+					makeFamily("addOp", 2);
+					makeFamily("arithExpr", 1);
+				}
+				else {
+					makeFamily("addOp", 2);
+					makeFamily("arithExpr", 1);
+				}
+				
 				return true;
 			}
 			else {
@@ -759,6 +911,7 @@ public class Parser {
 			}
 		}
 		else if (followSetContains(NonTerminal.arithExprTail)) {
+			stack.push(AST.makeNode());
 			write("arithExprTail -> EPSILON");
 			return true;
 		}
@@ -799,6 +952,10 @@ public class Parser {
 		if (firstSetContains(NonTerminal.factor)) {
 			write("term -> factor termTail");
 			if (factor() & termTail()) {
+				if (stack.peek().getClass().equals(EpsilonNode.class)) {
+					stack.pop();
+					makeFamily("term", 1);
+				}
 				return true;
 			}
 			else {
@@ -816,6 +973,18 @@ public class Parser {
 		if (firstSetContains(NonTerminal.multOp)) {
 			write("termTail -> multOp factor termTail");
 			if (multOp() & factor() & termTail()) {
+				ASTNode termTail = stack.peek();
+				if (termTail.getClass().equals(EpsilonNode.class)) {
+					stack.pop();
+					makeFamily("term", 1);
+					makeFamily("mulOp", 2);
+					makeFamily("term", 1);
+				}
+				else {
+					makeFamily("mulOp", 2);
+					makeFamily("term", 1);
+				}
+				
 				return true;
 			}
 			else {
@@ -823,6 +992,7 @@ public class Parser {
 			}
 		}
 		else if (followSetContains(NonTerminal.termTail)) {
+			stack.push(AST.makeNode());
 			write("termTail -> EPSILON");
 			return true;
 		}
@@ -850,6 +1020,8 @@ public class Parser {
 		else if (firstSetContains(TokenType.INT_NUM)) {
 			write("factor -> 'int_num'");
 			if (match(TokenType.INT_NUM)) {
+				stack.push(AST.makeNode("num"));
+				makeFamily("factor", 1);
 				return true;
 			}
 			else {
@@ -859,6 +1031,8 @@ public class Parser {
 		else if (firstSetContains(TokenType.FLOAT_NUM)) {
 			write("factor -> 'float_num'");
 			if (match(TokenType.FLOAT_NUM)) {
+				stack.push(AST.makeNode("num"));
+				makeFamily("factor", 1);
 				return true;
 			}
 			else {
@@ -868,6 +1042,7 @@ public class Parser {
 		else if (firstSetContains(TokenType.LPAREN)) {
 			write("factor -> '(' arithExpr ')'");
 			if (match(TokenType.LPAREN) & arithExpr() & match(TokenType.RPAREN)) {
+				makeFamily("factor", 1);
 				return true;
 			}
 			else {
@@ -877,6 +1052,9 @@ public class Parser {
 		else if (firstSetContains(TokenType.NOT)) {
 			write("factor -> 'not' factor");
 			if (match(TokenType.NOT) & factor()) {
+				makeFamily("factor", 1);
+				makeFamily("not", 1);
+				makeFamily("factor", 1);
 				return true;
 			}
 			else {
@@ -886,6 +1064,9 @@ public class Parser {
 		else if (firstSetContains(NonTerminal.sign)) {
 			write("factor -> sign factor");
 			if (sign() & factor()) {
+				makeFamily("factor", 1);
+				makeFamily("sign", 1);
+				makeFamily("factor", 1);
 				return true;
 			}
 			else {
@@ -903,6 +1084,27 @@ public class Parser {
 		if (firstSetContains(TokenType.ID)) {
 			write("factorTemp -> 'id' factorPrime");
 			if (match(TokenType.ID) & factorPrime()) {
+				
+				ASTNode factorPrime = stack.pop();
+				if (factorPrime.getClass().equals(FCallNode.class)) {
+					stack.push(factorPrime);
+					makeFamily("factor", 1);
+				} 
+				else if (factorPrime.getClass().equals(VarElementNode.class)){
+					makeFamily("varElement", 1);
+					stack.push(factorPrime);
+					makeFamily("var", 2);
+					makeFamily("factor", 1);
+				}
+				else if (factorPrime.getClass().equals(EpsilonNode.class)){
+					makeFamily("factor", 1);
+				}
+				else {
+					stack.push(factorPrime);
+					makeFamily("var", 1);
+					makeFamily("factor", 1);
+				}
+				
 				return true;
 			}
 			else {
@@ -918,9 +1120,32 @@ public class Parser {
 	// factorPrime -> indiceList factorTempTemp 
 	//	 | '(' aParams ')' factorTempTemp	
 		if (!skipErrors(NonTerminal.factorPrime)) return false;
-		if (firstSetContains(NonTerminal.indiceList)) {
-			write("actorPrime -> indiceList factorTempTemp");
+		if (firstSetContains(NonTerminal.indiceList) | followSetContains(NonTerminal.factorPrime) | followSetContains(NonTerminal.indiceList)) {
+			write("factorPrime -> indiceList factorTempTemp");
 			if (indiceList() & factorTempTemp()) {
+				if (stack.peek().getClass().equals(EpsilonNode.class)) {
+					stack.pop();
+					if (stack.peek().getClass().equals(EpsilonNode.class)) {
+					}
+					else {
+						makeFamily("dataMember", 2);
+					}
+				}
+				else if (!stack.peek().getClass().equals(VarElementNode.class)){
+					makeFamily("varElement", 1);
+					ASTNode varElement = stack.pop();
+					makeFamily("dataMember", 2);
+					stack.push(varElement);
+				}
+				else {
+					ASTNode varElement = stack.pop();
+					makeFamily("varElement", 1);
+					stack.push(varElement);
+					mergeNode(2);
+					varElement = stack.pop();
+					makeFamily("dataMember", 2);
+					stack.push(varElement);
+				}
 				return true;
 			}
 			else {
@@ -931,15 +1156,26 @@ public class Parser {
 			write("factorPrime -> '(' aParams ')' factorTempTemp");
 			if (match(TokenType.LPAREN) & aParams() & match(TokenType.RPAREN) &
 					factorTempTemp()) {
-				return true;
-			}
-			else {
-				return false;
-			}
-		}
-		else if (followSetContains(NonTerminal.factorPrime) | followSetContains(NonTerminal.indiceList)) {
-			write("factorPrime -> indiceList factorTempTemp");
-			if (indiceList() & factorTempTemp()) {
+				
+				if (stack.peek().getClass().equals(EpsilonNode.class)) {
+					stack.pop();
+					makeFamily("fCall", 2);
+				}
+				else if (!stack.peek().getClass().equals(VarElementNode.class)){
+					makeFamily("varElement", 1);
+					ASTNode varElement = stack.pop();
+					makeFamily("fCall", 2);
+					stack.push(varElement);
+				}
+				else {
+					ASTNode varElement = stack.pop();
+					makeFamily("varElement", 1);
+					stack.push(varElement);
+					mergeNode(2);
+					varElement = stack.pop();
+					makeFamily("fCall", 2);
+					stack.push(varElement);
+				}
 				return true;
 			}
 			else {
@@ -964,6 +1200,7 @@ public class Parser {
 			}
 		}
 		else if (followSetContains(NonTerminal.factorTempTemp)) {
+			stack.push(AST.makeNode());
 			write("factorTempTemp -> EPSILON");
 			return true;
 		}
@@ -991,9 +1228,21 @@ public class Parser {
 	// variableTail -> indiceList variablePrime  
 	//	  | '(' aParams ')' '.' variable  	
 		if (!skipErrors(NonTerminal.variableTail)) return false;
-		if (firstSetContains(NonTerminal.indiceList)) {
+		if (firstSetContains(NonTerminal.indiceList) | followSetContains(NonTerminal.variableTail) | followSetContains(NonTerminal.indiceList)) {
 			write("variableTail -> indiceList variablePrime");
 			if (indiceList() & variablePrime()) {
+				ASTNode variablePrime = stack.pop();
+				makeFamily("dataMember", 2);
+				if (!variablePrime.getClass().equals(EpsilonNode.class)) {
+					stack.push(variablePrime.getLeftmostChild());
+					
+					makeFamily("var", 2);
+				}
+				else {
+					makeFamily("var", 1);
+				}
+				
+				
 				return true;
 			}
 			else {
@@ -1004,15 +1253,11 @@ public class Parser {
 			write("variableTail -> '(' aParams ')' '.' variable");
 			if (match(TokenType.LPAREN) & aParams() & match(TokenType.RPAREN) &
 					match(TokenType.DOT) & variable()) {
-				return true;
-			}
-			else {
-				return false;
-			}
-		}
-		else if (followSetContains(NonTerminal.variableTail) | followSetContains(NonTerminal.indiceList)) {
-			write("variableTail -> indiceList variablePrime");
-			if (indiceList() & variablePrime()) {
+				
+				ASTNode variable = stack.pop();
+				makeFamily("fCall", 2);
+				stack.push(variable);
+				mergeNode(2);
 				return true;
 			}
 			else {
@@ -1037,6 +1282,7 @@ public class Parser {
 			}
 		}
 		else if (followSetContains(NonTerminal.variablePrime)) {
+			stack.push(AST.makeNode());
 			write("variablePrime -> EPSILON");
 			return true;
 		}
@@ -1066,6 +1312,8 @@ public class Parser {
 		if (firstSetContains(NonTerminal.indice)) {
 			write("indiceList -> indice indiceList");
 			if (indice() & indiceList()) {
+				stack.push(stack.pop().getLeftmostChild());
+				makeFamily("indexList", 2);
 				return true;
 			}
 			else {
@@ -1073,6 +1321,8 @@ public class Parser {
 			}
 		}
 		else if (followSetContains(NonTerminal.indiceList)) {
+			stack.push(AST.makeNode());
+			makeFamily("indexList", 1);
 			write("indiceList -> EPSILON");
 			return true;
 		}
@@ -1086,6 +1336,7 @@ public class Parser {
 		if (firstSetContains(TokenType.LBRACKET)) {
 			write("arraySize -> '[' 'int_num' ']'");
 			if (match(TokenType.LBRACKET) & match(TokenType.INT_NUM) & match(TokenType.RBRACKET)) {
+				stack.push(AST.makeNode("num"));
 				return true;
 			}
 			else {
@@ -1102,6 +1353,8 @@ public class Parser {
 		if (firstSetContains(NonTerminal.arraySize)) {
 			write("arraySizeList -> arraySize arraySizeList");
 			if (arraySize() & arraySizeList()) {
+				stack.push(stack.pop().getLeftmostChild());
+				makeFamily("dimList", 2);
 				return true;
 			}
 			else {
@@ -1109,6 +1362,8 @@ public class Parser {
 			}
 		}
 		else if (followSetContains(NonTerminal.arraySizeList)) {
+			stack.push(AST.makeNode());
+			makeFamily("dimList", 1);
 			write("arraySizeList -> EPSILON");
 			return true;
 		}
@@ -1122,6 +1377,7 @@ public class Parser {
 		if (firstSetContains(TokenType.INTEGER)) {
 			write("type -> 'integer'");
 			if (match(TokenType.INTEGER)) {
+				stack.push(AST.makeNode("type"));
 				return true;
 			}
 			else {
@@ -1131,6 +1387,7 @@ public class Parser {
 		else if (firstSetContains(TokenType.FLOAT)) {
 			write("type -> 'float'");
 			if (match(TokenType.FLOAT)) {
+				stack.push(AST.makeNode("type"));
 				return true;
 			}
 			else {
@@ -1140,6 +1397,8 @@ public class Parser {
 		else if (firstSetContains(TokenType.ID)) {
 			write("type -> 'id'");
 			if (match(TokenType.ID)) {
+				stack.pop();
+				stack.push(AST.makeNode("type"));
 				return true;
 			}
 			else {
@@ -1156,6 +1415,10 @@ public class Parser {
 		if (firstSetContains(NonTerminal.type)) {
 			write("fParams -> type 'id' arraySizeList fParamsTailList");
 			if (type() & match(TokenType.ID) & arraySizeList() & fParamsTailList()) {
+				ASTNode fParamsTailList = stack.pop();
+				makeFamily("fParams", 3);
+				stack.push(fParamsTailList);
+				makeFamily("fParamsList", 2);
 				return true;
 			}
 			else {
@@ -1163,6 +1426,8 @@ public class Parser {
 			}
 		}
 		else if (followSetContains(NonTerminal.fParams)) {
+			stack.push(AST.makeNode());
+			makeFamily("fParamsList", 1);
 			write("fParams ->EPSILON");
 			return true;
 		}
@@ -1176,6 +1441,7 @@ public class Parser {
 		if (firstSetContains(TokenType.COMMA)) {
 			write("fParamsTail -> ',' type 'id' arraySizeList");
 			if (match(TokenType.COMMA) & type() & match(TokenType.ID) & arraySizeList()) {
+				makeFamily("fParams", 3);
 				return true;
 			}
 			else {
@@ -1192,6 +1458,7 @@ public class Parser {
 		if (firstSetContains(NonTerminal.fParamsTail)) {
 			write("fParamsTailList -> fParamsTail fParamsTailList");
 			if (fParamsTail() & fParamsTailList()) {
+				mergeNode(2);
 				return true;
 			}
 			else {
@@ -1199,6 +1466,7 @@ public class Parser {
 			}
 		}
 		else if (followSetContains(NonTerminal.fParamsTailList)) {
+			stack.push(AST.makeNode());
 			write("fParamsTailList -> EPSILON");
 			return true;
 		}
@@ -1212,6 +1480,7 @@ public class Parser {
 		if (firstSetContains(NonTerminal.expr)) {
 			write("aParams -> expr aParamsTailList");
 			if (expr() & aParamsTailList()) {
+				makeFamily("aParams", 2);
 				return true;
 			}
 			else {
@@ -1219,6 +1488,8 @@ public class Parser {
 			}
 		}
 		else if (followSetContains(NonTerminal.aParams)) {
+			stack.push(AST.makeNode());
+			makeFamily("aParams", 1);
 			write("aParams -> EPSILON");
 			return true;
 		}
@@ -1248,6 +1519,7 @@ public class Parser {
 		if (firstSetContains(NonTerminal.aParamsTail)) {
 			write("aParamsTailList -> aParamsTail aParamsTailList");
 			if (aParamsTail() & aParamsTailList()) {
+				mergeNode(2);
 				return true;
 			}
 			else {
@@ -1255,6 +1527,7 @@ public class Parser {
 			}
 		}
 		else if (followSetContains(NonTerminal.aParamsTailList)) {
+			stack.push(AST.makeNode());
 			write("aParamsTailList -> EPSILON");
 			return true;
 		}
@@ -1284,6 +1557,7 @@ public class Parser {
 		if (firstSetContains(TokenType.EQ)) {
 			write("relOp -> 'eq'");
 			if (match(TokenType.EQ)) {
+				stack.push(AST.makeNode("relOp"));
 				return true;
 			}
 			else {
@@ -1293,6 +1567,7 @@ public class Parser {
 		else if (firstSetContains(TokenType.NEQ)) {
 			write("relOp -> 'neq'");
 			if (match(TokenType.NEQ)) {
+				stack.push(AST.makeNode("relOp"));
 				return true;
 			}
 			else {
@@ -1302,6 +1577,7 @@ public class Parser {
 		else if (firstSetContains(TokenType.LT)) {
 			write("relOp -> 'lt'");
 			if (match(TokenType.LT)) {
+				stack.push(AST.makeNode("relOp"));
 				return true;
 			}
 			else {
@@ -1311,6 +1587,7 @@ public class Parser {
 		else if (firstSetContains(TokenType.GT)) {
 			write("relOp -> 'gt'");
 			if (match(TokenType.GT)) {
+				stack.push(AST.makeNode("relOp"));
 				return true;
 			}
 			else {
@@ -1320,6 +1597,7 @@ public class Parser {
 		else if (firstSetContains(TokenType.LEQ)) {
 			write("relOp -> 'leq'");
 			if (match(TokenType.LEQ)) {
+				stack.push(AST.makeNode("relOp"));
 				return true;
 			}
 			else {
@@ -1329,6 +1607,7 @@ public class Parser {
 		else if (firstSetContains(TokenType.GEQ)) {
 			write("relOp -> 'geq'");
 			if (match(TokenType.GEQ)) {
+				stack.push(AST.makeNode("relOp"));
 				return true;
 			}
 			else {
@@ -1421,7 +1700,6 @@ public class Parser {
 				firstSet.add(TokenType.ID);
 				firstSet.add(TokenType.INTEGER);
 				firstSet.add(TokenType.MAIN);
-				firstSet.add(TokenType.EPSILON);
 				break;
 			case classDeclList:
 				firstSet.add(TokenType.EPSILON);

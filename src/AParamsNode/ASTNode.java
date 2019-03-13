@@ -1,4 +1,4 @@
-package AST;
+package AParamsNode;
 
 import token.TokenType;
 
@@ -8,32 +8,19 @@ public class ASTNode {
 	protected ASTNode rightSibling;
 	protected ASTNode leftmostChild;
 	
-	protected String type;
+	protected String value;
 	
-	public ASTNode() {
+	public ASTNode(String v) {
 		parent = null;
 		leftmostSibling = this;
 		rightSibling = null;
 		leftmostChild = null;
+		value = v;
 	}
-	
-	public ASTNode(String type) {
-		parent = null;
-		leftmostSibling = this;
-		rightSibling = null;
-		leftmostChild = null;
-		this.type = type;
-	}
-	
 	
 	public void print(int level) {
 		
-		//System.out.println("level " + level + ": " + type);
-		
-		for (int i = 0; i < level; i++) {
-			System.out.print("-");
-		}
-		System.out.println(type);
+		System.out.println("level " + level + ": " + value);
 		
 		if (leftmostChild != null) {
 			leftmostChild.print(level + 1);
@@ -42,6 +29,11 @@ public class ASTNode {
 		if (rightSibling != null) {
 			rightSibling.print(level);
 		}
+		
+
+		
+
+		
 	}
 	
 	public ASTNode makeSibling(ASTNode newNode) {
@@ -83,7 +75,4 @@ public class ASTNode {
 		}
 	}
 	
-	public ASTNode getLeftmostChild() {
-		return leftmostChild;
-	}
 }

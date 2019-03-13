@@ -1,0 +1,6 @@
+Syntax error at line 5. Expected (terminal: INT_NUM).
+Syntax error at line 5. Expected (terminal: INT_NUM).
+Syntax error at line 7. Expected (terminal: INT_NUM).
+Syntax error at line 7. Expected (terminal: RBRACKET).
+Syntax error at line 7. Expected (non-terminal: arraySizeList).
+Syntax error at line 11. Expected (non-terminal: expr).

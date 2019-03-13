@@ -1,0 +1,97 @@
+prog -> classDeclList funcDefList 'main' funcBody ';'
+classDecl -> 'class' 'id' extendClass '{' varOrfuncDeclList '}' ';'
+classDeclList -> classDecl classDeclList | EPSILON
+
+
+varOrfuncDeclTail -> arraySizeList | '(' fParams ')'
+varOrfuncDeclList -> type 'id' varOrfuncDeclTail ';' varOrfuncDeclList | EPSILON
+
+extendClass -> ':' 'id' idList | EPSILON
+idList -> ',' 'id' idList | EPSILON
+
+funcHead -> type 'id' classScope '(' fParams ')'
+classScope -> 'sr' 'id' | EPSILON
+
+funcDef -> funcHead funcBody ';'
+funcDefList -> funcDef funcDefList | EPSILON
+
+funcBody -> '{' varstatList'}'
+
+
+
+varstat -> 'id' varstatPrime ';'
+ | 'integer' 'id' arraySizeList ';'
+ | 'float' 'id' arraySizeList ';'
+ | statementPrime
+varstatList -> varstat varstatList | EPSILON
+
+varstatPrime -> 'id' arraySizeList
+ | variableTail assignOp expr
+
+statement -> assignStat ';'
+ | 'if' '(' expr ')' 'then' statBlock 'else' statBlock ';'
+ | 'for' '(' type 'id' assignOp expr ';' relExpr ';' assignStat ')' statBlock ';'
+ | 'read' '(' variable ')' ';'
+ | 'write' '(' expr ')' ';'
+ | 'return' '(' expr ')' ';'
+statementList -> statement statementList | EPSILON
+
+statementPrime -> 'if' '(' expr ')' 'then' statBlock 'else' statBlock ';'
+ | 'for' '(' type 'id' assignOp expr ';' relExpr ';' assignStat ')' statBlock ';'
+ | 'read' '(' variable ')' ';'
+ | 'write' '(' expr ')' ';'
+ | 'return' '(' expr ')' ';'
+
+
+assignStat -> variable assignOp expr
+statBlock -> '{' statementList '}' | statement | EPSILON
+
+expr -> arithExpr exprTail
+exprTail -> relOp arithExpr | EPSILON
+
+relExpr -> arithExpr relOp arithExpr
+arithExpr -> term arithExprTail
+arithExprTail -> addOp term arithExprTail | EPSILON
+
+sign -> '+' | '-'
+term -> factor termTail
+termTail -> multOp factor termTail | EPSILON
+
+factor -> factorTemp 
+ | 'int_num' | 'float_num'
+ | '(' arithExpr ')'
+ | 'not' factor
+ | sign factor
+
+factorTemp -> 'id' factorPrime
+factorPrime -> indiceList factorTempTemp 
+ | '(' aParams ')' factorTempTemp
+factorTempTemp -> '.' factorTemp | EPSILON 
+
+
+variable -> 'id' variableTail 
+variableTail -> indiceList variablePrime  
+  | '(' aParams ')' '.' variable  
+variablePrime -> '.' variable 
+  | EPSILON 
+
+
+indice -> '[' arithExpr ']'
+indiceList -> indice indiceList | EPSILON
+
+arraySize -> '[' 'int_num' ']'
+arraySizeList -> arraySize arraySizeList | EPSILON
+
+type -> 'integer' | 'float' | 'id'
+fParams -> type 'id' arraySizeList fParamsTailList | EPSILON
+fParamsTail -> ',' type 'id' arraySizeList
+fParamsTailList -> fParamsTail fParamsTailList | EPSILON
+
+aParams -> expr aParamsTailList | EPSILON
+aParamsTail -> ',' expr
+aParamsTailList -> aParamsTail aParamsTailList | EPSILON
+
+assignOp -> '='
+relOp -> 'eq' | 'neq' | 'lt' | 'gt' | 'leq' | 'geq'
+addOp -> '+' | '-' | 'or'
+multOp -> '*' | '/' | 'and' 
