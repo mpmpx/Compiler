@@ -16,7 +16,7 @@ public class AST {
 		return new EpsilonNode();
 	}
 	
-	public static ASTNode makeNode(String op) {
+	public static ASTNode makeNode(String op, String... value) {
 		switch (op) {
 			case "addOp": return new AddOpNode(op);
 			case "aParams": return new AParamsNode(op);
@@ -36,7 +36,7 @@ public class AST {
 			case "funcDefList": return new FuncDefListNode(op);
 			case "funcDef": return new FuncDefNode(op);
 			case "getStat": return new GetStatNode(op);
-			case "id": return new IdNode(op, "");
+			case "id": return new IdNode(op, value[0]);
 			case "ifStat": return new IfStatNode(op);
 			case "indexList": return new IndexListNode(op);
 			case "inherList": return new InherListNode(op);
@@ -44,7 +44,7 @@ public class AST {
 			case "membList": return new MembListNode(op);
 			case "mulOp": return new MulOpNode(op);
 			case "not": return new NotNode(op);
-			case "num": return new NumNode(op, "");
+			case "num": return new NumNode(op, value[0]);
 			case "prog": return new ProgNode(op);
 			case "putStat": return new PutStatNode(op);
 			case "relExpr": return new RelExprNode(op);

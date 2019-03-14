@@ -3,7 +3,7 @@ package parser;
 import java.io.File;
 import java.nio.file.Paths;
 import java.util.LinkedList;
-import java.util.Stack;
+//import java.util.Stack;
 
 import AST.*;
 import lexer.Scanner;
@@ -24,6 +24,39 @@ public class Parser {
 	private FileWriterWrapper errorWriter;
 	
 	private Stack<ASTNode> stack;
+	
+	
+	class Stack<T> {
+		
+		LinkedList<T> array;
+		
+		public Stack() {
+			array = new LinkedList<T>();
+		}
+		
+		public void push(T t) {
+			array.addFirst(t);
+			print();
+		}
+		
+		public T pop() {
+			T t = array.removeFirst();
+			print();
+			return t;
+		}
+		
+		public T peek() {
+			return array.getFirst();
+		}
+		
+		private void print() {
+			for (T t : array) {
+				System.out.println(t);
+			}
+			System.out.println("---------------------");
+		}
+	}
+	
 	
 	private enum NonTerminal {
 		prog, classDecl, classDeclList, varOrfuncDeclTail, varOrfuncDeclList,
@@ -91,7 +124,6 @@ public class Parser {
 	}
 	
 	private void write(String str) {
-		//System.out.println(str);
 		outputWriter.write(str + "\n");
 	}
 	
@@ -109,7 +141,11 @@ public class Parser {
 		if (lookahead.type == tokenType) {
 			
 			if (tokenType == TokenType.ID) {
-				stack.push(AST.makeNode("id"));
+				stack.push(AST.makeNode("id", lookahead.value));
+			}
+			
+			if (tokenType == TokenType.INT_NUM || tokenType == TokenType.FLOAT_NUM) {
+				stack.push(AST.makeNode("num", lookahead.value));
 			}
 			
 			nextToken();
@@ -1011,6 +1047,7 @@ public class Parser {
 		if (firstSetContains(NonTerminal.factorTemp)) {
 			write("factor -> factorTemp");
 			if (factorTemp()) {
+				makeFamily("factor", 1);
 				return true;
 			}
 			else {
@@ -1020,7 +1057,6 @@ public class Parser {
 		else if (firstSetContains(TokenType.INT_NUM)) {
 			write("factor -> 'int_num'");
 			if (match(TokenType.INT_NUM)) {
-				stack.push(AST.makeNode("num"));
 				makeFamily("factor", 1);
 				return true;
 			}
@@ -1031,7 +1067,6 @@ public class Parser {
 		else if (firstSetContains(TokenType.FLOAT_NUM)) {
 			write("factor -> 'float_num'");
 			if (match(TokenType.FLOAT_NUM)) {
-				stack.push(AST.makeNode("num"));
 				makeFamily("factor", 1);
 				return true;
 			}
@@ -1088,21 +1123,10 @@ public class Parser {
 				ASTNode factorPrime = stack.pop();
 				if (factorPrime.getClass().equals(FCallNode.class)) {
 					stack.push(factorPrime);
-					makeFamily("factor", 1);
 				} 
 				else if (factorPrime.getClass().equals(VarElementNode.class)){
-					makeFamily("varElement", 1);
-					stack.push(factorPrime);
-					makeFamily("var", 2);
-					makeFamily("factor", 1);
-				}
-				else if (factorPrime.getClass().equals(EpsilonNode.class)){
-					makeFamily("factor", 1);
-				}
-				else {
 					stack.push(factorPrime);
 					makeFamily("var", 1);
-					makeFamily("factor", 1);
 				}
 				
 				return true;
@@ -1125,26 +1149,22 @@ public class Parser {
 			if (indiceList() & factorTempTemp()) {
 				if (stack.peek().getClass().equals(EpsilonNode.class)) {
 					stack.pop();
-					if (stack.peek().getClass().equals(EpsilonNode.class)) {
-					}
-					else {
-						makeFamily("dataMember", 2);
-					}
-				}
-				else if (!stack.peek().getClass().equals(VarElementNode.class)){
+					makeFamily("dataMember", 2);
 					makeFamily("varElement", 1);
+				}
+				else if (stack.peek().getClass().equals(VarElementNode.class)){
 					ASTNode varElement = stack.pop();
 					makeFamily("dataMember", 2);
+					makeFamily("varElement", 1);
 					stack.push(varElement);
 				}
 				else {
+					makeFamily("varElement", 1);
 					ASTNode varElement = stack.pop();
+					makeFamily("dataMember", 2);
 					makeFamily("varElement", 1);
 					stack.push(varElement);
 					mergeNode(2);
-					varElement = stack.pop();
-					makeFamily("dataMember", 2);
-					stack.push(varElement);
 				}
 				return true;
 			}
@@ -1161,20 +1181,20 @@ public class Parser {
 					stack.pop();
 					makeFamily("fCall", 2);
 				}
-				else if (!stack.peek().getClass().equals(VarElementNode.class)){
-					makeFamily("varElement", 1);
+				else if (stack.peek().getClass().equals(VarElementNode.class)){
 					ASTNode varElement = stack.pop();
 					makeFamily("fCall", 2);
-					stack.push(varElement);
-				}
-				else {
-					ASTNode varElement = stack.pop();
 					makeFamily("varElement", 1);
 					stack.push(varElement);
 					mergeNode(2);
-					varElement = stack.pop();
+				}
+				else {
+					makeFamily("varElement", 1);
+					ASTNode varElement = stack.pop();
 					makeFamily("fCall", 2);
+					makeFamily("varElement", 1);
 					stack.push(varElement);
+					mergeNode(2);
 				}
 				return true;
 			}
@@ -1235,7 +1255,7 @@ public class Parser {
 				makeFamily("dataMember", 2);
 				if (!variablePrime.getClass().equals(EpsilonNode.class)) {
 					stack.push(variablePrime.getLeftmostChild());
-					
+					makeFamily("varElement", 1);
 					makeFamily("var", 2);
 				}
 				else {
@@ -1256,8 +1276,10 @@ public class Parser {
 				
 				ASTNode variable = stack.pop();
 				makeFamily("fCall", 2);
-				stack.push(variable);
+				makeFamily("varElement", 1);
+				stack.push(variable.getLeftmostChild());
 				mergeNode(2);
+				makeFamily("var", 1);
 				return true;
 			}
 			else {
@@ -1336,7 +1358,6 @@ public class Parser {
 		if (firstSetContains(TokenType.LBRACKET)) {
 			write("arraySize -> '[' 'int_num' ']'");
 			if (match(TokenType.LBRACKET) & match(TokenType.INT_NUM) & match(TokenType.RBRACKET)) {
-				stack.push(AST.makeNode("num"));
 				return true;
 			}
 			else {

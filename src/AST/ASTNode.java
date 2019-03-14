@@ -1,7 +1,5 @@
 package AST;
 
-import token.TokenType;
-
 public class ASTNode {
 	protected ASTNode parent;
 	protected ASTNode leftmostSibling;
@@ -42,6 +40,10 @@ public class ASTNode {
 		if (rightSibling != null) {
 			rightSibling.print(level);
 		}
+	}
+	
+	public String getType() {
+		return type;
 	}
 	
 	public ASTNode makeSibling(ASTNode newNode) {
