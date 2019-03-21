@@ -1,0 +1,18 @@
+class c1 {
+
+integer a1;
+integer a1;
+integer f1();
+integer f1();
+};
+
+integer f1() {};
+
+main{
+
+float v1;
+float v1;
+float v2;
+c1 v3;
+
+};

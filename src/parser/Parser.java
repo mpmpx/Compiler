@@ -36,12 +36,12 @@ public class Parser {
 		
 		public void push(T t) {
 			array.addFirst(t);
-			print();
+			//print();
 		}
 		
 		public T pop() {
 			T t = array.removeFirst();
-			print();
+			//print();
 			return t;
 		}
 		
@@ -141,11 +141,14 @@ public class Parser {
 		if (lookahead.type == tokenType) {
 			
 			if (tokenType == TokenType.ID) {
-				stack.push(AST.makeNode("id", lookahead.value));
+				stack.push(AST.makeNode("id", lookahead.value, Integer.toString(lookahead.lineNum)));
 			}
 			
-			if (tokenType == TokenType.INT_NUM || tokenType == TokenType.FLOAT_NUM) {
-				stack.push(AST.makeNode("num", lookahead.value));
+			if (tokenType == TokenType.INT_NUM) {
+				stack.push(AST.makeNode("num", lookahead.value, "integer", Integer.toString(lookahead.lineNum)));
+			}
+			else if (tokenType == TokenType.FLOAT_NUM) {
+				stack.push(AST.makeNode("num", lookahead.value, "float", Integer.toString(lookahead.lineNum)));
 			}
 			
 			nextToken();
@@ -509,7 +512,7 @@ public class Parser {
 			if (match(TokenType.INTEGER) & match(TokenType.ID) & arraySizeList() & match(TokenType.SEMICOLON)) {
 				ASTNode arraySizeList = stack.pop();
 				ASTNode id = stack.pop();
-				stack.push(AST.makeNode("type"));
+				stack.push(AST.makeNode("type", "integer", Integer.toString(lookahead.lineNum)));
 				stack.push(id);
 				stack.push(arraySizeList);
 				makeFamily("varDecl", 3);
@@ -524,7 +527,7 @@ public class Parser {
 			if (match(TokenType.FLOAT) & match(TokenType.ID) & arraySizeList() & match(TokenType.SEMICOLON)) {
 				ASTNode arraySizeList = stack.pop();
 				ASTNode id = stack.pop();
-				stack.push(AST.makeNode("type"));
+				stack.push(AST.makeNode("type", "float", Integer.toString(lookahead.lineNum)));
 				stack.push(id);
 				stack.push(arraySizeList);
 				makeFamily("varDecl", 3);
@@ -582,8 +585,8 @@ public class Parser {
 			if (match(TokenType.ID) & arraySizeList()) {
 				ASTNode arraySizeList = stack.pop();
 				ASTNode id = stack.pop();
-				stack.pop();
-				stack.push(AST.makeNode("type"));
+				ASTNode type = stack.pop();
+				stack.push(AST.makeNode("type", type.getData(), Integer.toString(lookahead.lineNum)));
 				stack.push(id);
 				stack.push(arraySizeList);
 				makeFamily("varDecl", 3);
@@ -1159,11 +1162,11 @@ public class Parser {
 					stack.push(varElement);
 				}
 				else {
-					makeFamily("varElement", 1);
+					//makeFamily("varElement", 1);
 					ASTNode varElement = stack.pop();
 					makeFamily("dataMember", 2);
 					makeFamily("varElement", 1);
-					stack.push(varElement);
+					stack.push(varElement.getLeftmostChild());
 					mergeNode(2);
 				}
 				return true;
@@ -1398,7 +1401,7 @@ public class Parser {
 		if (firstSetContains(TokenType.INTEGER)) {
 			write("type -> 'integer'");
 			if (match(TokenType.INTEGER)) {
-				stack.push(AST.makeNode("type"));
+				stack.push(AST.makeNode("type", "integer", Integer.toString(lookahead.lineNum)));
 				return true;
 			}
 			else {
@@ -1408,7 +1411,7 @@ public class Parser {
 		else if (firstSetContains(TokenType.FLOAT)) {
 			write("type -> 'float'");
 			if (match(TokenType.FLOAT)) {
-				stack.push(AST.makeNode("type"));
+				stack.push(AST.makeNode("type", "float", Integer.toString(lookahead.lineNum)));
 				return true;
 			}
 			else {
@@ -1418,8 +1421,8 @@ public class Parser {
 		else if (firstSetContains(TokenType.ID)) {
 			write("type -> 'id'");
 			if (match(TokenType.ID)) {
-				stack.pop();
-				stack.push(AST.makeNode("type"));
+				ASTNode idNode = stack.pop();
+				stack.push(AST.makeNode("type", idNode.getData(), Integer.toString(lookahead.lineNum)));
 				return true;
 			}
 			else {

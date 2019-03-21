@@ -1,48 +1,83 @@
 package symbolTable;
 
-class Entry {
+import java.util.ArrayList;
+import java.util.LinkedList;
+
+public class Entry {
 
 	private String name;
 	private Kind kind;
 	private String[] type;
 	private SymbolTable link;
-	private SymbolTable scope;
+	private boolean isMembFunc = false;
+	private String scope;
+	private LinkedList<String> inherList;
+	private ArrayList<String> dimList;
 	
-	public Entry(String name, Kind kind, String... type) {
+	public Entry(SymbolTable link, String name, Kind kind, String... type) {
 		this.name = name;
 		this.kind = kind;
 		this.type = type;
 		
 		if (kind.equals(Kind.Class) || kind.equals(Kind.Function)) {
-			link = new SymbolTable(name);
+			this.link = link;
 		}
 	}
 	
-	public Entry(SymbolTable scope, String name, Kind kind, String... type) {
-		this.scope = scope;
-		this.name = name;
-		this.kind = kind;
-		this.type = type;
-		
-		if (kind.equals(Kind.Class) || kind.equals(Kind.Function)) {
-			link = new SymbolTable(name);
-		}
-	}
-	
-	public void setScope(SymbolTable scope) {
+	public void setScope(String scope) {
 		this.scope = scope;
 	}
 	
-	public SymbolTable parent() {
-		return scope;
+	public String getScope() {
+		return this.scope;
+	}
+	
+	public void setClassScope(LinkedList<String> inherList) {
+		this.inherList = inherList;
+	}
+	
+	public LinkedList<String> getClassScope() {
+		return inherList;
+	}
+	
+	public void setLink(SymbolTable link) {
+		this.link = link;
 	}
 	
 	public SymbolTable link() {
 		return link;
 	}
 	
+	public String getName() {
+		return name;
+	}
+	
+	public String[] getType() {
+		return this.type;
+	}
+	
+	public Kind getKind() {
+		return kind;
+	}
+	
+	public void isMembFunc(boolean status) {
+		isMembFunc = status;
+	}
+	
+	public boolean isMembFunc() {
+		return isMembFunc;
+	}
+	
+	public void setDimList(ArrayList<String> list) {
+		this.dimList = list;
+	}
+	
+	public ArrayList<String> getDimList() {
+		return dimList;
+	}
+	
 	public String toString() {
-		String result =  name + "  " + kind + "  ";
+		String result =  name + " " + kind + " ";
 		if (type.length > 0) {
 			result += type[0];
 
@@ -55,10 +90,5 @@ class Entry {
 			}
 		}
 		return result;
-	}
-	
-	public static void main(String[] arg) {
-		Entry entry = new Entry("table_name", Kind.Class, "int","int","int");
-		System.out.println(entry);
 	}
 }

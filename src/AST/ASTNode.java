@@ -1,12 +1,22 @@
 package AST;
 
+import symbolTable.Entry;
+import symbolTable.SymbolTable;
+import visitor.Visitor;
+
 public class ASTNode {
 	protected ASTNode parent;
 	protected ASTNode leftmostSibling;
 	protected ASTNode rightSibling;
 	protected ASTNode leftmostChild;
 	
+	protected SymbolTable symTab;
+	protected Entry entry;
+	
+	protected String dataType;
 	protected String type;
+	protected String data;
+	protected int lineNo;
 	
 	public ASTNode() {
 		parent = null;
@@ -23,6 +33,24 @@ public class ASTNode {
 		this.type = type;
 	}
 	
+	public ASTNode(String type, String data) {
+		parent = null;
+		leftmostSibling = this;
+		rightSibling = null;
+		leftmostChild = null;
+		this.type = type;
+		this.data = data;
+	}
+	 
+	public ASTNode(String type, String data, String lineNo) {
+		parent = null;
+		leftmostSibling = this;
+		rightSibling = null;
+		leftmostChild = null;
+		this.type = type;
+		this.data = data;
+		this.lineNo = Integer.parseInt(lineNo);
+	}
 	
 	public void print(int level) {
 		
@@ -42,8 +70,43 @@ public class ASTNode {
 		}
 	}
 	
+	public void accept(Visitor visitor) {
+		ASTNode childNode = this.leftmostChild;
+		
+		while (childNode != null) {
+			childNode.accept(visitor);
+			childNode = childNode.next();
+		}
+		
+		visitor.visit(this);
+	}
+	
+	public void setDataType(String type) {
+		this.dataType = type;
+	}
+	
+	public void setData(String data) {
+		this.data = data;
+	}
+	
+	public String getDataType() {
+		return dataType;
+	}
+	
 	public String getType() {
 		return type;
+	}
+	
+	public String getData() {
+		return data;
+	}
+	
+	public void setLineNo(int lineNo) {
+		this.lineNo = lineNo;
+	}
+	
+	public int getLineNo() {
+		return lineNo;
 	}
 	
 	public ASTNode makeSibling(ASTNode newNode) {
@@ -87,5 +150,42 @@ public class ASTNode {
 	
 	public ASTNode getLeftmostChild() {
 		return leftmostChild;
+	}
+	
+	public ASTNode getChild(int index) {
+		return leftmostChild.getSibling(index);
+	}
+	
+	private ASTNode getSibling(int index) {
+		if (index == 0) {
+			return this;
+		}
+		else {
+			return rightSibling.getSibling(index - 1);
+		}
+	}
+	
+	public ASTNode parent() {
+		return parent;
+	}
+	
+	public ASTNode next() {
+		return rightSibling;
+	}
+	
+	public void setSymbolTable(SymbolTable symbTab) {
+		this.symTab = symbTab;
+	}
+	
+	public SymbolTable getSymbolTable() {
+		return this.symTab;
+	}
+	
+	public void setEntry(Entry entry) {
+		this.entry = entry;
+	}
+	
+	public Entry getEntry() {
+		return this.entry;
 	}
 }

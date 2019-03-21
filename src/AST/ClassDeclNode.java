@@ -1,9 +1,21 @@
 package AST;
 
-public class ClassDeclNode extends ASTNode{
+import visitor.Visitor;
 
-	public ClassDeclNode(String v) {
-		super(v);
+public class ClassDeclNode extends ASTNode {
+
+	public ClassDeclNode(String type) {
+		super(type);
 	}
-
+	
+	public void accept(Visitor visitor) {
+		ASTNode childNode = this.leftmostChild;
+		
+		while (childNode != null) {
+			childNode.accept(visitor);
+			childNode = childNode.next();
+		}
+		
+		visitor.visit(this);
+	}
 }

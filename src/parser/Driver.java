@@ -6,6 +6,8 @@ import javax.swing.JFileChooser;
 import javax.swing.filechooser.FileSystemView;
 
 import AST.AST;
+import visitor.SymTabCreationVisitor;
+import visitor.TypeCheckingVisitor;
 
 public class Driver {
 	private String rootDir;
@@ -27,6 +29,8 @@ public class Driver {
 	 */
 	public void run(String fileName) {
 		String selectedFile = fileName;
+		SymTabCreationVisitor symTabCreationVisitor = new SymTabCreationVisitor();
+		TypeCheckingVisitor typeCheckingVisitor = new TypeCheckingVisitor();
 		
 		if (fileName == null) {
 			selectedFile = selectFile();
@@ -35,7 +39,9 @@ public class Driver {
 		parser = new Parser(selectedFile);
 		if (parser.parse(ast)) {
 			System.out.println("No Error");
-			ast.print();
+			//ast.print();
+			ast.getRoot().accept(symTabCreationVisitor);
+			ast.getRoot().accept(typeCheckingVisitor);
 		}
 		else {
 			System.out.println("Parsing fails.");
