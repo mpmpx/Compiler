@@ -1,0 +1,9 @@
+main {
+
+integer a[1][2][3];
+integer b;
+
+b = a[1][2];
+
+
+};

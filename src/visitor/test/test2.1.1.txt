@@ -1,0 +1,15 @@
+
+integer f1() {
+
+float b;
+
+return(b);
+};
+
+main {
+
+integer a;
+float b;
+
+a = a + b;
+};

@@ -1,0 +1,19 @@
+class c1 {
+integer f1();};
+
+integer c1::f1() {
+return (1);
+};
+
+main {
+
+integer a;
+integer b;
+integer c;
+c1 d;
+
+b = a.f1();
+c = d.f1();
+a = d.f2(); 
+
+};

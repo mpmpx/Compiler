@@ -1,0 +1,11 @@
+class a{
+
+};
+
+integer a::b(){
+integer o;
+};
+
+
+main {
+}; 

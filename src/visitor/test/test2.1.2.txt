@@ -1,0 +1,10 @@
+main {
+
+integer b;
+cc k;
+
+a = 2 + 1;
+
+b = random();
+
+};
