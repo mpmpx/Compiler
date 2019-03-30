@@ -39,8 +39,9 @@ public class Driver {
 		parser = new Parser(selectedFile);
 		if (parser.parse(ast)) {
 			System.out.println("No Error");
-			//ast.print();
+			ast.print();
 			ast.getRoot().accept(symTabCreationVisitor);
+			typeCheckingVisitor.setGlobalTable(ast.getRoot().getSymbolTable());
 			ast.getRoot().accept(typeCheckingVisitor);
 		}
 		else {

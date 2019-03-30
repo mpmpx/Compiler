@@ -1160,13 +1160,14 @@ public class Parser {
 					makeFamily("dataMember", 2);
 					makeFamily("varElement", 1);
 					stack.push(varElement);
+					mergeNode(2);
 				}
 				else {
-					//makeFamily("varElement", 1);
+					makeFamily("varElement", 1);
 					ASTNode varElement = stack.pop();
 					makeFamily("dataMember", 2);
 					makeFamily("varElement", 1);
-					stack.push(varElement.getLeftmostChild());
+					stack.push(varElement);
 					mergeNode(2);
 				}
 				return true;
@@ -1257,11 +1258,12 @@ public class Parser {
 				ASTNode variablePrime = stack.pop();
 				makeFamily("dataMember", 2);
 				if (!variablePrime.getClass().equals(EpsilonNode.class)) {
-					stack.push(variablePrime.getLeftmostChild());
 					makeFamily("varElement", 1);
+					stack.push(variablePrime.getLeftmostChild());
 					makeFamily("var", 2);
 				}
 				else {
+					makeFamily("varElement", 1);
 					makeFamily("var", 1);
 				}
 				

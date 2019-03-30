@@ -148,12 +148,17 @@ public class SymTabCreationVisitor extends Visitor {
 		
 		ASTNode numNode = node.getChild(2).getLeftmostChild();
 		while (!numNode.getClass().equals(EpsilonNode.class)) {
-			//dimList.add(node.getData());
-			type += ("[" + numNode.getData() + "]");
+			node.addDim(numNode.getData());
 			numNode = numNode.next();
 		}
-		Entry entry = new Entry(null, varName, Kind.Variable, type);
-		//entry.setDimList(dimList);
+		String typeDim = type;
+		if (node.getDimList() != null) {
+			for (String s : node.getDimList()) {
+				typeDim += "[" + s + "]";
+			}
+		}
+		
+		Entry entry = new Entry(node.getDimList(), null, varName, Kind.Variable, type);
 		node.setEntry(entry);
 	}
 	
@@ -196,7 +201,7 @@ public class SymTabCreationVisitor extends Visitor {
 			scopePrefix = scopeName + ":";
 		}
 		
-		SymbolTable symbTab = new SymbolTable(scopePrefix + funcName);
+		SymbolTable symbTab = new SymbolTable(funcName);
 		ASTNode fParams = node.getChild(3).getLeftmostChild();
 		while (!fParams.getClass().equals(EpsilonNode.class)) {
 			String fParamsType = fParams.getChild(0).getData();
@@ -262,12 +267,13 @@ public class SymTabCreationVisitor extends Visitor {
 		String fParamsType = node.getChild(0).getData();
 	
 		ASTNode numNode = node.getChild(2).getLeftmostChild();
+		
 		while (!numNode.getClass().equals(EpsilonNode.class)) {
-			fParamsType += ("[" +  numNode.getData() + "]");
+			node.addDim(numNode.getData());
 			numNode = numNode.next();
 		}
 		
-		node.setEntry(new Entry(null, node.getChild(1).getData(), Kind.Parameter, fParamsType));
+		node.setEntry(new Entry(node.getDimList(), null, node.getChild(1).getData(), Kind.Parameter, fParamsType));
 	}
 	
 	private void checkShadowing(SymbolTable symbTab) {

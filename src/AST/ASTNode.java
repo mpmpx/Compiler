@@ -1,5 +1,7 @@
 package AST;
 
+import java.util.ArrayList;
+
 import symbolTable.Entry;
 import symbolTable.SymbolTable;
 import visitor.Visitor;
@@ -17,6 +19,7 @@ public class ASTNode {
 	protected String type;
 	protected String data;
 	protected int lineNo;
+	protected ArrayList<String> dimList;
 	
 	public ASTNode() {
 		parent = null;
@@ -79,6 +82,21 @@ public class ASTNode {
 		}
 		
 		visitor.visit(this);
+	}
+	
+	public ArrayList<String> getDimList() {
+		return dimList;
+	}
+	
+	public void setDimList(ArrayList<String> list) {
+		dimList = list;
+	}
+	
+	public void addDim(String s) {
+		if (dimList == null) {
+			dimList = new ArrayList<String>();
+		}
+		dimList.add(s);
 	}
 	
 	public void setDataType(String type) {

@@ -24,6 +24,17 @@ public class Entry {
 		}
 	}
 	
+	public Entry(ArrayList<String> list, SymbolTable link, String name, Kind kind, String... type) {
+		this.name = name;
+		this.kind = kind;
+		this.type = type;
+		this.dimList = list;
+		
+		if (kind.equals(Kind.Class) || kind.equals(Kind.Function)) {
+			this.link = link;
+		}
+	}
+	
 	public void setScope(String scope) {
 		this.scope = scope;
 	}
@@ -81,6 +92,12 @@ public class Entry {
 		if (type.length > 0) {
 			result += type[0];
 
+			if (dimList != null) {
+				for (String s : dimList) {
+					result += ("[" + s + "]");
+				}
+			}
+			
 			if (type.length > 1) {
 				result += ":";
 				for (int i = 1; i < type.length; i++) {

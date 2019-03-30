@@ -8,6 +8,12 @@ import symbolTable.SymbolTable;
 
 public class TypeCheckingVisitor extends Visitor {
 	
+	private SymbolTable globalTable;
+
+	
+	public void setGlobalTable(SymbolTable table) {
+		globalTable = table;
+	}
 	
 	public void visit(VarDeclNode node) {
 		String type = node.getChild(0).getData();
@@ -101,7 +107,8 @@ public class TypeCheckingVisitor extends Visitor {
 				currentNode = currentNode.getChild(0);
 			}
 			String data2 = currentNode.getData();
-			if (symbTab.parent().lookup(symbTab.lookup(data).getType()[0]).link().lookup(data2) == null) {
+			
+			if (globalTable.lookup(symbTab.lookup(data).getType()[0]).link().lookup(data2) == null) {
 				System.out.println("Semantic Error: " + data2 + " is not defined as a member of class \"" + 
 						symbTab.parent().lookup(symbTab.lookup(data).getType()[0]).getName() + "\" at line " + currentNode.getLineNo() + ".");
 			}
@@ -141,6 +148,21 @@ public class TypeCheckingVisitor extends Visitor {
 		String leftType = node.getChild(0).getDataType();
 		String rightType = node.getChild(2).getDataType();
 		
+		if (leftType == null) {
+			leftType = "unknown";
+		}
+		
+		if (rightType == null) {
+			rightType = "unknown";
+		}
+		
+		if (leftType.indexOf('[') != -1) {
+			leftType = leftType.substring(0, leftType.indexOf('['));
+		}
+		
+		if (rightType.indexOf('[') != -1) {
+			rightType = rightType.substring(0, rightType.indexOf('['));
+		}
 		if (!leftType.equals(rightType)) {
 			System.out.println("RelExprNode Error: " + node.getChild(0).getData() + "(" + leftType + ") and "
 					+ node.getChild(2).getData() + "(" + rightType + ").");
@@ -244,7 +266,7 @@ public class TypeCheckingVisitor extends Visitor {
 		node.setData(funcName);
 		
 		// Find the symbol table of current scope.
-		while(symbTab == null) {
+		while(symbTab == null || symbTab.getName() == null) {
 			currentNode = currentNode.parent();
 			symbTab = currentNode.getSymbolTable();
 		}
@@ -308,6 +330,7 @@ public class TypeCheckingVisitor extends Visitor {
 		node.setDataType(node.getLeftmostChild().getDataType());
 		node.setData(node.getLeftmostChild().getData());
 		node.setLineNo(node.getLeftmostChild().getLineNo());
+		node.setDimList(node.getLeftmostChild().getDimList());
 		SymbolTable symbTab = null;
 		
 		ASTNode currentNode = node.getChild(1).getLeftmostChild();
@@ -318,24 +341,23 @@ public class TypeCheckingVisitor extends Visitor {
 		}
 		
 		// Find the symbol table of current scope.
-		while(symbTab == null) {
+		while(symbTab == null || symbTab.getName() == null) {
 			currentNode = currentNode.parent();
 			symbTab = currentNode.getSymbolTable();
 		}
-		
 		if (symbTab.getName() == null) {
 			symbTab = currentNode.parent().getSymbolTable();
 		}
 		
 		if (symbTab.lookup(node.getLeftmostChild().getData()) != null) {
-			String type = symbTab.lookup(node.getLeftmostChild().getData()).getType()[0];
+			ArrayList<String> dimList = symbTab.lookup(node.getLeftmostChild().getData()).getDimList();
 			int declIndexNum = 0;
-			for (int i = 0; i< type.length(); i++) {
-				if (type.charAt(i) == '[') {
-					declIndexNum++;
-				}
+			
+			if (dimList != null) {
+				declIndexNum = dimList.size();
 			}
-			if (indexNum != declIndexNum) {
+			
+			if (indexNum > declIndexNum) {
 				System.out.println("Semantic Error: number of dimensions of variable \"" + node.getLeftmostChild().getData() + "\" is "
 						+ indexNum + " at line " + node.getLineNo() + ". Expected " + declIndexNum + "." );
 			}
@@ -347,24 +369,28 @@ public class TypeCheckingVisitor extends Visitor {
 		node.setDataType(node.getLeftmostChild().getDataType());
 		node.setData(node.getLeftmostChild().getData());
 		node.setLineNo(node.getLeftmostChild().getLineNo());
+		node.setDimList(node.getLeftmostChild().getDimList());
 	}
 	
 	public void visit(FactorNode node) {
 		node.setDataType(node.getLeftmostChild().getDataType());
 		node.setData(node.getLeftmostChild().getData());
 		node.setLineNo(node.getLeftmostChild().getLineNo());
+		node.setDimList(node.getLeftmostChild().getDimList());
 	}
 	
 	public void visit(NotNode node) {
 		node.setDataType(node.getLeftmostChild().getDataType());
 		node.setData(node.getLeftmostChild().getData());
 		node.setLineNo(node.getLeftmostChild().getLineNo());
+		node.setDimList(node.getLeftmostChild().getDimList());
 	}
 	
 	public void visit(SignNode node) {
 		node.setDataType(node.getLeftmostChild().getDataType());
 		node.setData(node.getLeftmostChild().getData());
 		node.setLineNo(node.getLeftmostChild().getLineNo());
+		node.setDimList(node.getLeftmostChild().getDimList());
 	}
 	
 	public void visit(ReturnStatNode node) {
